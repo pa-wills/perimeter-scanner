@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Resources:
+  WorkerInstance:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
+    Properties:
+      ImageId: "ami-02a66f06b3557a897"
+      InstanceType: "t2.micro"
+      KeyName: "pw-devtest"
+      SecurityGroupIds: 
+        - !Ref WorkerInstanceSecurityGroup
+      SubnetId: ""
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - "\n"
+            - - "#!/bin/bash"
+              - "sudo yum update -y"
+              - "sudo yum install git pip -y"
+
+              - "# recon-ng installation"
+              - "cd /home/ec2-user"
+              - "git clone https://github.com/lanmaster53/recon-ng.git"
+              - "pip3 install -r recon-ng/REQUIREMENTS"
+              - "export PATH=\"$PATH:/home/ec2-user/recon-ng/\""
+              - "echo export PATH=\"$PATH:/home/ec2-user/recon-ng/\" >> .bash_profile"
+
+#              - "# recon-ng surveillance"
+#              - "recon-cli -C \"workspaces create nbnco\""
+#              - "recon-cli -C \"workspaces load nbnco\""
+#              - "recon-cli -C \"marketplace install hackertarget\""
+#              - "recon-cli -C \"modules load hackertarget\""
+#              - "recon-cli -C \"options set SOURCE nbnco.com.au\""
+#              - "recon-cli -C \"run\""
+#              - "recon-cli -C \"options set SOURCE nbnco.net.au\""
+#              - "recon-cli -C \"run\""
+
+              - Fn::Join:
+                - ""
+                - - "/opt/aws/bin/cfn-signal -e $? --stack "
+                  - !Ref 'AWS::StackName'
+                  - " --resource WorkerInstance --region "
+                  - !Ref 'AWS::Region'
+
+  WorkerInstanceSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable SSH access via port 22 IPv4 & v6
+      SecurityGroupIngress:
+        - Description: 'Allow SSH IPv4 IN'
+          IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+        - Description: 'Allow SSH IPv6 IN'
+          IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIpv6: ::/0
+
