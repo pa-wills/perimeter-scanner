@@ -1,6 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
+# TODO: paramterise the domains.
+
 Resources:
   WorkerInstance:
     Type: AWS::EC2::Instance
@@ -9,6 +11,7 @@ Resources:
         Timeout: PT5M
     Properties:
       ImageId: "ami-02a66f06b3557a897"
+      IamInstanceProfile: !Ref WorkerInstanceProfile
       InstanceType: "t2.micro"
       KeyName: "pw-devtest"
       SecurityGroupIds: 
@@ -61,4 +64,105 @@ Resources:
           FromPort: '22'
           ToPort: '22'
           CidrIpv6: ::/0
+
+  WorkerInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Roles:
+        - !Ref WorkerInstanceRole
+
+  WorkerInstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+
+  WorkerInstanceRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: policyToAllowAccessToS3
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 's3:PutObject'
+            Resource: !Join
+              - ''
+              - - !GetAtt ResultsBucket.Arn
+                - /*
+      Roles:
+        - !Ref WorkerInstanceRole
+
+  ResultsBucket:
+    Type: AWS::S3::Bucket
+
+  ResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        -
+          AttributeName: "datetime"
+          AttributeType: "S"
+        -
+          AttributeName: "host"
+          AttributeType: "S"
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        -
+          AttributeName: "datetime"
+          KeyType: "HASH"
+        -
+          AttributeName: "host"
+          KeyType: "RANGE"
+
+  onArrivalOfResults:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'The function that parses the results, and uploads them.'
+      InlineCode: |
+        def handler(event, context):
+          print("Hello World!")
+      MemorySize: 256
+      Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 5
+
+  onArrivalOfResultsExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+
+  onArrivalOfResultsExecutionRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: policyToAllowAccessToS3
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 'dynamodb:PutItem'
+            Resource: !GetAtt ResultsTable.Arn
+      Roles:
+        - !Ref onArrivalOfResultsExecutionRole
+
 
