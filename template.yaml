@@ -2,6 +2,20 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
 # TODO: paramterise the domains.
+Parameters:
+  ReconngWorkspaceName:
+    Description: "Workspace name"
+    Default: ""
+    Type: String
+
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "recon-ng configuration"
+        Parameters: 
+          - ReconngWorkspaceName
 
 Resources:
   WorkerInstance:
@@ -29,9 +43,22 @@ Resources:
               - "cd /home/ec2-user"
               - "git clone https://github.com/lanmaster53/recon-ng.git"
               - "pip3 install -r recon-ng/REQUIREMENTS"
-              - "export PATH=\"$PATH:/home/ec2-user/recon-ng/\""
+#              - "export PATH=\"$PATH:/home/ec2-user/recon-ng/\""
               - "echo export PATH=\"$PATH:/home/ec2-user/recon-ng/\" >> .bash_profile"
 
+              - "# Env vars necessary for the code on the EC2 instance to do its job."
+              - Fn::Join:
+                - ""
+                - - "echo export PSCAN_S3_BUCKET=\""
+                  - !Ref ResultsBucket
+                  - "\" >> .bash_profile"
+              - Fn::Join:
+                - ""
+                - - "echo export PSCAN_RECONNG_WORKSPACE=\""
+                  - !Ref ReconngWorkspaceName
+                  - "\" >> .bash_profile"
+
+              - "# Signal stack that creation has successfully completed."
               - Fn::Join:
                 - ""
                 - - "/opt/aws/bin/cfn-signal -e $? --stack "
