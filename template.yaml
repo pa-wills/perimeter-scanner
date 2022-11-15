@@ -4,7 +4,11 @@ Transform: 'AWS::Serverless-2016-10-31'
 # TODO: paramterise the domains.
 Parameters:
   ReconngWorkspaceName:
-    Description: "Workspace name"
+    Description: "Please specify the Workspace Name to be used"
+    Default: ""
+    Type: String
+  DomainsToEnumerate:
+    Description: "Please provide a comma-delimited list of domains to enumerate"
     Default: ""
     Type: String
 
@@ -43,21 +47,24 @@ Resources:
               - "cd /home/ec2-user"
               - "git clone https://github.com/lanmaster53/recon-ng.git"
               - "pip3 install -r recon-ng/REQUIREMENTS"
-#              - "export PATH=\"$PATH:/home/ec2-user/recon-ng/\""
               - "echo export PATH=\"$PATH:/home/ec2-user/recon-ng/\" >> .bash_profile"
 
               - "# Env vars necessary for the code on the EC2 instance to do its job."
               - Fn::Join:
                 - ""
-                - - "echo export PSCAN_S3_BUCKET=\""
-                  - !Ref ResultsBucket
+                - - "echo export PSCAN_DOMAINS_TO_ENUMERATE=\""
+                  - !Ref DomainsToEnumerate
                   - "\" >> .bash_profile"
               - Fn::Join:
                 - ""
                 - - "echo export PSCAN_RECONNG_WORKSPACE=\""
                   - !Ref ReconngWorkspaceName
                   - "\" >> .bash_profile"
-
+              - Fn::Join:
+                - ""
+                - - "echo export PSCAN_S3_BUCKET=\""
+                  - !Ref ResultsBucket
+                  - "\" >> .bash_profile"
               - "# Signal stack that creation has successfully completed."
               - Fn::Join:
                 - ""
