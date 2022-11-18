@@ -9,7 +9,8 @@
 
 
 # Note relies on ENV VARs set by EC2 at launchtime. Specifically: PSCAN_RECONNG_WORKSPACE, PSCAN_S3_BUCKET, etc.
-domains = $(echo $PSCAN_DOMAINS_TO_ENUMERATE | tr "," "\n")
+. ~/.bash_profile
+domains=$(echo $PSCAN_DOMAINS_TO_ENUMERATE | tr "," "\n")
 
 
 cd /home/ec2-user/recon-ng/
@@ -72,7 +73,8 @@ done
 aws s3 cp /home/ec2-user/.recon-ng/workspaces/$PSCAN_RECONNG_WORKSPACE/results.csv s3://$PSCAN_S3_BUCKET
 rm /home/ec2-user/.recon-ng/workspaces/$PSCAN_RECONNG_WORKSPACE/results.csv
 
-
-
-
+# All done. Wait a nominal period, and then stop the instance.
+sleep 60
+INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
+aws ec2 stop-instances --instance-ids $INSTANCE_ID --region ap-southeast-2
 
