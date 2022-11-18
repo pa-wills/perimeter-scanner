@@ -222,7 +222,7 @@ Resources:
         def handler(event, context):
 
           tableName = str(os.environ.get('TABLE_NAME'))
-          ttl = int(datetime.datetime.now().timestamp()) + (3600 * 1) # I.e. Now + 1 hour. 
+          ttl = int(datetime.datetime.now().timestamp()) + (3600 * 24) # I.e. Now + 24 hours. 
 
           s3 = boto3.resource("s3")
           s3Client = boto3.client("s3")
@@ -286,6 +286,8 @@ Resources:
                 - "lambda.amazonaws.com"
             Action: 
               - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
       Path: "/"
 
   onArrivalOfResultsExecutionRolePolicy:
@@ -352,6 +354,8 @@ Resources:
                 - "lambda.amazonaws.com"
             Action: 
               - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
       Path: "/"
 
   startEc2InstancesExecutionRolePolicy:
