@@ -11,6 +11,12 @@ Parameters:
     Description: "Please provide a comma-delimited list of domains to enumerate"
     Default: ""
     Type: String
+  GitHubUsername:
+    Description: "Please provide the username for accessing the private repo"
+    Type: String    
+  GitHubPersonalAccessToken:
+    Description: "Please provide the PAT for accessing the private repo"
+    Type: String    
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -20,6 +26,13 @@ Metadata:
           default: "recon-ng configuration"
         Parameters: 
           - ReconngWorkspaceName
+          - DomainsToEnumerate
+      - 
+        Label: 
+          default: "GitHub configuration"
+        Parameters: 
+          - GitHubUsername
+          - GitHubPersonalAccessToken
 
 Resources:
   WorkerInstance:
@@ -48,6 +61,17 @@ Resources:
               - "git clone https://github.com/lanmaster53/recon-ng.git"
               - "pip3 install -r recon-ng/REQUIREMENTS"
               - "echo export PATH=\"$PATH:/home/ec2-user/recon-ng/\" >> .bash_profile"
+
+              - "# Clone the repo"
+              - Fn::Join:
+                - ""
+                - - "git clone https://"
+                  - !Ref GitHubUsername
+                  - ":"
+                  - !Ref GitHubPersonalAccessToken
+                  - "@github.com/pa-wills/perimeter-scanner.git"
+              - "cp perimeter-scanner/enumerateSubdomains.bash ."
+              - "rm -rf perimeter-scanner"
 
               - "# Env vars necessary for the code on the EC2 instance to do its job."
               - Fn::Join:
@@ -103,8 +127,8 @@ Resources:
         Statement: 
           - 
             Effect: "Allow"
-            Principal: 
-              Service: 
+            Principal:
+              Service:
                 - "ec2.amazonaws.com"
             Action: 
               - "sts:AssumeRole"
