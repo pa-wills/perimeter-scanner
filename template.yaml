@@ -3,6 +3,10 @@ Transform: 'AWS::Serverless-2016-10-31'
 
 # TODO: paramterise the domains.
 Parameters:
+  ScheduleStartInstancePeriodicityParameter:
+    Description: "Please specify how often the worker should run"
+    Default: "rate(2 hours)"
+    Type: String
   ReconngWorkspaceName:
     Description: "Please specify the Workspace Name to be used"
     Default: ""
@@ -71,7 +75,10 @@ Resources:
                   - !Ref GitHubPersonalAccessToken
                   - "@github.com/pa-wills/perimeter-scanner.git"
               - "cp perimeter-scanner/enumerateSubdomains.bash ."
-              - "rm -rf perimeter-scanner"
+              - "# rm -rf perimeter-scanner"
+
+              - "# Cron the bash script to run at boot"
+              - "echo \"@reboot bash enumerateSubdomains.bash &> /home/ec2-user/enumerate.log\" | crontab -"
 
               - "# Env vars necessary for the code on the EC2 instance to do its job."
               - Fn::Join:
@@ -89,6 +96,7 @@ Resources:
                 - - "echo export PSCAN_S3_BUCKET=\""
                   - !Ref ResultsBucket
                   - "\" >> .bash_profile"
+
               - "# Signal stack that creation has successfully completed."
               - Fn::Join:
                 - ""
@@ -137,7 +145,7 @@ Resources:
   WorkerInstanceRolePolicy:
     Type: 'AWS::IAM::Policy'
     Properties:
-      PolicyName: policyToAllowAccessToS3
+      PolicyName: policyForTheEc2Instance
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -148,6 +156,13 @@ Resources:
               - ''
               - - !GetAtt ResultsBucket.Arn
                 - /*
+          - Effect: Allow
+            Action: 
+              - 'ec2:StopInstances'
+            Resource: !Join
+              - ''
+              - - 'arn:aws:ec2:ap-southeast-2:*:instance/'
+                - !Ref WorkerInstance
       Roles:
         - !Ref WorkerInstanceRole
 
@@ -294,4 +309,65 @@ Resources:
       Roles:
         - !Ref onArrivalOfResultsExecutionRole
 
+
+  startEc2Instance:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'The function that starts my EC2 worker instance.'
+      Environment:
+        Variables:
+          INSTANCE_ID: 
+            Ref: WorkerInstance
+      Events:
+        ProducerScheduleEvent:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref ScheduleStartInstancePeriodicityParameter
+      InlineCode: |
+        import boto3
+        import os
+        
+        region = 'ap-southeast-2'
+        ec2 = boto3.client('ec2', region_name=region)
+
+        def handler(event, context):
+          ec2.start_instances(InstanceIds = [os.environ.get('INSTANCE_ID')])
+
+      MemorySize: 256
+      Role: !GetAtt startEc2InstancesExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 20
+
+  startEc2InstancesExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+
+  startEc2InstancesExecutionRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: policyToAllowEc2InstancesToStart
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 'ec2:StartInstances'
+            Resource: !Join
+              - ''
+              - - 'arn:aws:ec2:ap-southeast-2:*:instance/'
+                - !Ref WorkerInstance
+
+      Roles:
+        - !Ref startEc2InstancesExecutionRole
 
