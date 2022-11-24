@@ -106,11 +106,8 @@ Resources:
                   - !Ref 'AWS::Region'
 
               - "# Stop the instance (we don't run enumeration on the launch boot)."
-              - Fn::Join:
-                - ""
-                - - "aws ec2 stop-instances --instance-ids "
-#                  - !Ref 'WorkerInstance'
-                  - "  --region ap-southeast-2"
+              - "INSTANCEID=\"$(curl http://169.254.169.254/latest/meta-data/instance-id)\""
+              - "aws ec2 stop-instances --instance-ids $INSTANCEID --region ap-southeast-2"
 
   WorkerInstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
