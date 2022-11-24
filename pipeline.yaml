@@ -1,0 +1,400 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This stack represents the pipeline for my personal website.
+
+# Assumptions
+#
+# 1. Existing connection to Github through CodeStar for the source. 
+# 2. Personal Access Token stored in the Param Store.
+# 3. Role deployed in the target Accounts, for CFN to assume.
+# 4. An Account for this CICD workload to deploy to.
+# 5. Accounts for the DevTest and Production workloads to deploy to, from this pipeline.
+
+# Params are then entered directly into the GUI at stack-create/update time.
+Parameters:
+  CodeStarSourceConnectionArn:
+    Type: String
+    Description: "The ARN of the Codestar Connection for Github."
+    Default: "arn:aws:codestar-connections:ap-southeast-2:623056247312:connection/e23152ba-62a3-4321-93a5-314cf6858b87"
+  DevTestCfnRoleArn:
+    Type: String
+    Description: "The Role that will be assumed by CloudFormation in order to deploy DevTest resources."
+    Default: "arn:aws:iam::494507141278:role/cf-execution-role-devtest"
+  DevTestCodePipelineRoleArn:
+    Type: String
+    Description: "The Role that will be assumed by the CodePipeline in order to execute the DevTest stage."
+    Default: "arn:aws:iam::494507141278:role/cross-account-role-devtest"
+  GitHubFullRepoID:
+    Type: String
+    Description: "The GitHub repo's name."
+    Default: "pa-wills/perimeter-scanner"
+  GitHubRepoBranch:
+    Type: String
+    Description: "The GitHub repo's branch."
+    Default: "dev"
+  GitHubPersonalAccessToken:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: "The Param Store path for the PAT."
+    Default: "/perimeter-scanner-app/GitHubPersonalAccessToken" # Storing it here for the moment. TODO: use SecureString.
+  ProductionCfnRoleArn:
+    Type: String
+    Description: "The Role that will be assumed by CloudFormation in order to deploy production resources."
+    Default: "arn:aws:iam::732786819153:role/cf-execution-role-prod"
+  ProductionCodePipelineRoleArn:
+    Type: String
+    Description: "The Role that will be assumed by the CodePipeline in order to execute the Production stage."
+    Default: "arn:aws:iam::732786819153:role/cross-account-role-prod"
+  ReconngWorkspaceName:
+    Description: "Please specify the Workspace Name to be used"
+    Default: ""
+    Type: String
+  DomainsToEnumerate:
+    Description: "Please provide a comma-delimited list of domains to enumerate"
+    Default: ""
+    Type: String
+
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "Application Settings"
+        Parameters: 
+          - ReconngWorkspaceName
+          - DomainsToEnumerate
+      - 
+        Label: 
+          default: "Source Stage"
+        Parameters: 
+          - CodeStarSourceConnectionArn
+          - GitHubFullRepoID
+          - GitHubRepoBranch
+          - GitHubPersonalAccessToken
+      - 
+        Label: 
+          default: "DevTest Stage"
+        Parameters: 
+          - DevTestCodePipelineRoleArn
+          - DevTestCfnRoleArn
+      - 
+        Label: 
+          default: "Production Stage"
+        Parameters: 
+          - ProductionCodePipelineRoleArn
+          - ProductionCfnRoleArn
+
+Resources:
+  # What's here?
+  # A pipeline, and separate CodeBuild project.
+  # S3 bucket for the artifacts, KMS key for SSE-KMS.
+  # Custom Resource for the purposes of cleaning out the bucket on deletion.
+  # Roles for CodePipeline, for CodeBuild and for Cloudformation. And obviously associated Policies.
+
+  ProjectPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    DependsOn: [CodePipelineServiceRole]
+    Description: The pipeline. Kind of the core of things, really.
+    Properties:
+      ArtifactStore:
+        EncryptionKey:
+          Id: !GetAtt PipelineEncryptionKey.Arn
+          Type: KMS 
+        Location: !Ref PipelineOutputBucket
+        Type: S3
+      RoleArn: !GetAtt
+        - CodePipelineServiceRole
+        - Arn
+      Stages:
+      - Name: Source
+        Actions:
+        # https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CodestarConnectionSource.html
+        - Name: source
+          InputArtifacts: []
+          ActionTypeId:
+            Version: "1"
+            Category: Source
+            Owner: AWS
+            Provider: CodeStarSourceConnection
+          OutputArtifacts:
+          - Name: "SourceArtifact"
+          Configuration:
+            ConnectionArn: !Ref CodeStarSourceConnectionArn
+            FullRepositoryId: !Ref GitHubFullRepoID
+            BranchName: !Ref GitHubRepoBranch
+            OutputArtifactFormat: "CODE_ZIP"
+          RunOrder: 1
+      - Name: BuildAndTest
+        Actions:
+        - Name: devtest-create-update-stack
+          InputArtifacts:
+          - Name: "SourceArtifact"
+          ActionTypeId:
+            Category: Deploy
+            Owner: AWS
+            Version: "1"
+            Provider: CloudFormation
+          OutputArtifacts: []
+          Configuration:
+            ActionMode: CREATE_UPDATE # Difficulty separating into two steps, hence CREATE_UPDATE
+            StackName: PerimeterScanner-DevTest # Unfortunately this has to be set statically. Portability?
+            Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+            ChangeSetName: pipeline-changeset-devtest
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}"}'
+            RoleArn: !Ref DevTestCfnRoleArn
+            TemplatePath: "SourceArtifact::template.yaml"
+          RoleArn: !Ref DevTestCodePipelineRoleArn
+          RunOrder: 1
+      - Name: Production
+        Actions:
+        - Name: production-create-update-stack
+          InputArtifacts:
+          - Name: "SourceArtifact"
+          ActionTypeId:
+            Category: Deploy
+            Owner: AWS
+            Version: "1"
+            Provider: CloudFormation
+          OutputArtifacts: []
+          Configuration:
+            ActionMode: CREATE_UPDATE # Difficulty separating into two steps, hence CREATE_UPDATE
+            StackName: PwDotCom-Prod # Unfortunately this has to be set statically. Portability?
+            Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+            ChangeSetName: pipeline-changeset-prod
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}"}, "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)"'
+            RoleArn: !Ref ProductionCfnRoleArn
+            TemplatePath: "SourceArtifact::template.yaml"
+          RoleArn: !Ref ProductionCodePipelineRoleArn
+          RunOrder: 1
+
+  PipelineOutputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - Id: GlacierRule
+            Status: Enabled
+            ExpirationInDays: 90
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # https://stackoverflow.com/questions/48362572/aws-codepipeline-error-cross-account-pass-role-is-not-allowed
+  # This bucket needs to be accessible from the destination accounts.
+  PipelineOutputBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:  
+      Bucket: !Ref PipelineOutputBucket
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: ["s3:*"]
+          Resource:
+          - !Sub "arn:aws:s3:::${PipelineOutputBucket}"
+          - !Sub "arn:aws:s3:::${PipelineOutputBucket}/*"
+          Principal:
+            AWS:
+            - !GetAtt CodePipelineServiceRole.Arn
+            - !Ref DevTestCfnRoleArn
+            - !Ref ProductionCfnRoleArn
+            - !Ref DevTestCodePipelineRoleArn
+            - !Ref ProductionCodePipelineRoleArn
+
+  # TODO: I am probably going to have multiple pipelines, and I don't want one Key for each.
+  # So, perhaps break this out into a shared services stack w/in this CICD account.
+  PipelineEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key for SSE-KMS on the Pipeline Bucket.
+      Enabled: true
+      EnableKeyRotation: false
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: keyForPipelineArtifactEncryption
+        Statement:
+          - Sid: "Allow access through S3 for all principals in accounts needing to use the bucket."
+            Principal: 
+              AWS: "*"
+            Effect: Allow
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource:
+              - "*"
+            #Condition:
+              # TODO: where caller accounts, and Via service???
+          - Sid: "Allow administration of the key."
+            Principal: 
+              AWS: [
+                !Sub "arn:aws:iam::${AWS::AccountId}:root", 
+                !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-reserved/sso.amazonaws.com/ap-southeast-2/AWSReservedSSO_AWSAdministratorAccess_40a020b2fd86f86c"
+              ] 
+              # TODO: use intrinsic function to get the current SSO role identity, above. Is it even necesssary?
+            Effect: Allow
+            Action:
+              - kms:*
+            Resource:
+              - "*"
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+
+
+
+  # Copying someone else's example of the common bucket cleaning scenario, for Lambda custom resources.
+  # https://github.com/mike-mosher/custom-resource-s3-bucket-delete/blob/master/custom-resource.yml
+  CustomResourceLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+            
+          def handler(event, context):
+            print(event)
+            print('boto version ' + boto3.__version__)
+                        
+            # Globals
+            responseData = {}
+            ResponseStatus = cfnresponse.SUCCESS
+            s3bucketName = event['ResourceProperties']['s3bucketName']
+            if event['RequestType'] == 'Create':
+              responseData['Message'] = "Resource creation successful!"
+              
+            elif event['RequestType'] == 'Update':
+              responseData['Message'] = "Resource update successful!"
+              
+            elif event['RequestType'] == 'Delete':
+              # Need to empty the S3 bucket before it is deleted
+              s3 = boto3.resource('s3')
+              bucket = s3.Bucket(s3bucketName)
+              bucket.objects.all().delete()
+              responseData['Message'] = "Resource deletion successful!"
+            cfnresponse.send(event, context, ResponseStatus, responseData)
+            
+      Handler: index.handler
+      Runtime: python3.7
+      Role: !GetAtt CustomResourceLambdaExecutionRole.Arn
+
+  CustomResourceLambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: LoggingPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+        - PolicyName: S3Policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:List*
+                  - s3:DeleteObject
+                  - kms:*
+                Resource: '*'
+
+  CustomResource:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt CustomResourceLambdaFunction.Arn
+      s3bucketName: !Ref PipelineOutputBucket
+    DependsOn: PipelineOutputBucket
+
+  # </copy>
+
+  CodePipelineServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: CodePipelineRolePolicy # TODO: Use intrinsic function
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'codebuild:BatchGetBuilds'
+                  - 'codebuild:StartBuild'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'codestar-connections:UseConnection'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                  - 'lambda:ListFunctions'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'iam:PassRole'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'sts:AssumeRole'
+                Resource: 
+                  - !Ref ProductionCodePipelineRoleArn
+                  - !Ref DevTestCodePipelineRoleArn
+              - Effect: Allow
+                Action:
+                  - 's3:*'
+                  - 'cloudformation:*'
+                Resource: '*'
+
+  # The creating user needs to have IAM::PassRole in order to make this work.
+  CloudFormationTrustRole:
+    Description: Creating service role in IAM for AWS CloudFormation
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [cloudformation.amazonaws.com]
+          Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: CloudFormationRolePolicy # TODO: Use intrinsic function
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'iam:*'
+                  - 'lambda:*'
+                  - 's3:*'
+                  - 'cloudformation:*'
+                Resource: '*'

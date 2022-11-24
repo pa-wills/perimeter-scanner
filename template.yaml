@@ -105,6 +105,13 @@ Resources:
                   - " --resource WorkerInstance --region "
                   - !Ref 'AWS::Region'
 
+              - "# Stop the instance (we don't run enumeration on the launch boot)."
+              - Fn::Join:
+                - ""
+                - - "aws ec2 stop-instances --instance-ids "
+                  - !Ref: WorkerInstance
+                  - "  --region ap-southeast-2"
+
   WorkerInstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
