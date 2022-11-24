@@ -109,7 +109,7 @@ Resources:
               - Fn::Join:
                 - ""
                 - - "aws ec2 stop-instances --instance-ids "
-                  - !Ref: WorkerInstance
+                  - !Ref 'WorkerInstance'
                   - "  --region ap-southeast-2"
 
   WorkerInstanceSecurityGroup:
