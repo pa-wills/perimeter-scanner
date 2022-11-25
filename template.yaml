@@ -127,14 +127,12 @@ Resources:
           CidrIpv6: ::/0
 
   WorkerInstanceProfile:
-    DependsOn: WorkerInstanceRole
     Type: "AWS::IAM::InstanceProfile"
     Properties: 
       Roles:
         - !Ref WorkerInstanceRole
 
   WorkerInstanceRole:
-    DependsOn: WorkerInstanceRolePolicy
     Type: "AWS::IAM::Role"
     Properties: 
       AssumeRolePolicyDocument: 
@@ -166,10 +164,7 @@ Resources:
           - Effect: Allow
             Action: 
               - 'ec2:StopInstances'
-            Resource: !Join
-              - ''
-              - - 'arn:aws:ec2:ap-southeast-2:*:instance/'
-                - !Ref WorkerInstance
+            Resource: '*' # You'd want to constrain this to an Instance, but how without a circular reference?
       Roles:
         - !Ref WorkerInstanceRole
 
