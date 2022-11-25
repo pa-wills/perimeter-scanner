@@ -230,7 +230,7 @@ Resources:
         def handler(event, context):
 
           tableName = str(os.environ.get('TABLE_NAME'))
-          ttl = int(datetime.datetime.now().timestamp()) + int(os.environ.get('DynamoDbRetentionPeriod')) # I.e. Now + offset.
+          ttl = int(datetime.datetime.now().timestamp()) + int(os.environ.get('DYNAMODB_TTL_OFFSET')) # I.e. Now + offset.
 
           s3 = boto3.resource("s3")
           s3Client = boto3.client("s3")
