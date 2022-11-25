@@ -78,8 +78,8 @@ Resources:
               - "cp perimeter-scanner/enumerateSubdomains.bash ."
               - "# rm -rf perimeter-scanner"
 
-              - "# Cron the bash script to run at boot"
-              - "echo \"@reboot bash enumerateSubdomains.bash &> /home/ec2-user/enumerate.log\" | crontab -"
+              - "# Ensure that the script will run at boot"
+              - "echo \"@reboot bash /home/ec2-user/enumerateSubdomains.bash &> /home/ec2-user/enumerate.log\" | sudo crontab -u ec2-user -"
 
               - "# Env vars necessary for the code on the EC2 instance to do its job."
               - Fn::Join:
