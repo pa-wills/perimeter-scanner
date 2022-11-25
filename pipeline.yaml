@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: This stack represents the pipeline for my personal website.
+Description: This stack represents the pipeline for my perimeter scanner.
 
 # Assumptions
 #
@@ -138,7 +138,7 @@ Resources:
             StackName: PerimeterScanner-DevTest # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-devtest
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)"}'
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400"}'
             RoleArn: !Ref DevTestCfnRoleArn
             TemplatePath: "SourceArtifact::template.yaml"
           RoleArn: !Ref DevTestCodePipelineRoleArn
@@ -159,7 +159,7 @@ Resources:
             StackName: PwDotCom-Prod # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-prod
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)"}'
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000"}'
             RoleArn: !Ref ProductionCfnRoleArn
             TemplatePath: "SourceArtifact::template.yaml"
           RoleArn: !Ref ProductionCodePipelineRoleArn

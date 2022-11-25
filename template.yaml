@@ -7,6 +7,10 @@ Parameters:
     Description: "Please specify how often the worker should run"
     Default: "rate(2 hours)"
     Type: String
+  DynamoDbRetentionPeriod:
+    Description: "Please specify in seconds how long the DynamoDB table should retain its items for"
+    Default: "315360000" # 10 years
+    Type: Number
   ReconngWorkspaceName:
     Description: "Please specify the Workspace Name to be used"
     Default: ""
@@ -164,7 +168,7 @@ Resources:
           - Effect: Allow
             Action: 
               - 'ec2:StopInstances'
-            Resource: '*' # You'd want to constrain this to an Instance, but how without a circular reference?
+            Resource: '*' # You'd want to constrain this to an Instance, but how to do so without a circular reference?
       Roles:
         - !Ref WorkerInstanceRole
 
@@ -200,6 +204,8 @@ Resources:
       Description: 'The function that parses the results, and uploads them.'
       Environment:
         Variables:
+          DYNAMODB_TTL_OFFSET:
+            Ref: DynamoDbRetentionPeriod
           TABLE_NAME: 
             Ref: ResultsTableHosts
       Events:
@@ -224,7 +230,7 @@ Resources:
         def handler(event, context):
 
           tableName = str(os.environ.get('TABLE_NAME'))
-          ttl = int(datetime.datetime.now().timestamp()) + (3600 * 24) # I.e. Now + 24 hours. 
+          ttl = int(datetime.datetime.now().timestamp()) + int(os.environ.get('DynamoDbRetentionPeriod')) # I.e. Now + offset.
 
           s3 = boto3.resource("s3")
           s3Client = boto3.client("s3")
