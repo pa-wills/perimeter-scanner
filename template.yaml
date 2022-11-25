@@ -44,6 +44,7 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT5M
+    DependsOn: WorkerInstanceRole # If the Role isn't there, then the aws cli invocations won't be authorised.
     Properties:
       ImageId: "ami-02a66f06b3557a897"
       IamInstanceProfile: !Ref WorkerInstanceProfile
@@ -106,7 +107,7 @@ Resources:
                   - !Ref 'AWS::Region'
 
               - "# Stop the instance (we don't run enumeration on the launch boot)."
-              - "INSTANCEID=\"$(curl http://169.254.169.254/latest/meta-data/instance-id)\""
+              - "INSTANCEID=\"$(curl http://169.254.169.254/latest/meta-data/instance-id)\"" # You can't use a !Ref without causing a circular reference.
               - "aws ec2 stop-instances --instance-ids $INSTANCEID --region ap-southeast-2"
 
   WorkerInstanceSecurityGroup:
