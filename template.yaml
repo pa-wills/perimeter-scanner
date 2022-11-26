@@ -56,7 +56,8 @@ Resources:
       ImageId: "ami-02a66f06b3557a897"
       IamInstanceProfile: !Ref WorkerInstanceProfile
       InstanceType: "t2.micro"
-      KeyName: "pw-devtest"
+      KeyName: 
+        - !Ref KeyPairName
       SecurityGroupIds: 
         - !Ref WorkerInstanceSecurityGroup
       SubnetId: ""
