@@ -25,6 +25,9 @@ Parameters:
   GitHubPersonalAccessToken:
     Description: "Please provide the PAT for accessing the private repo"
     Type: String    
+  KeyPairName:
+    Description: "Please provide the name of the key pair corresponding to the EC2 worker"
+    Type: String    
 
 Metadata:
   AWS::CloudFormation::Interface: 
