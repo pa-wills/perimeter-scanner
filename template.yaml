@@ -27,7 +27,7 @@ Parameters:
     Type: String    
   KeyPairName:
     Description: "Please provide the name of the key pair corresponding to the EC2 worker"
-    Type: AWS::EC2::KeyPair::KeyName    
+    Type: String
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -56,8 +56,7 @@ Resources:
       ImageId: "ami-02a66f06b3557a897"
       IamInstanceProfile: !Ref WorkerInstanceProfile
       InstanceType: "t2.micro"
-      KeyName: 
-        - !Ref KeyPairName
+      KeyName: !Ref KeyPairName
       SecurityGroupIds: 
         - !Ref WorkerInstanceSecurityGroup
       SubnetId: ""
