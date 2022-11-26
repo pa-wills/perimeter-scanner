@@ -27,7 +27,7 @@ Parameters:
     Type: String    
   KeyPairName:
     Description: "Please provide the name of the key pair corresponding to the EC2 worker"
-    Type: String    
+    Type: AWS::EC2::KeyPair::KeyName    
 
 Metadata:
   AWS::CloudFormation::Interface: 
