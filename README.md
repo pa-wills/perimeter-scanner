@@ -2,22 +2,21 @@
 A schedulable OSINT scanner using [recon-ng](https://github.com/lanmaster53/recon-ng) which allows for the analysis of an attack surface over time.
 
 ## Background
-This project comes from a desire to learn how to build applications on AWS, and a practical need to under the attack surface of an organisation as a function of time. This initial, very basic release does domain enumeration periodically with effectively indefinite persistence of results. This will hopefully serves as a helpful baseline for dcata analysis.
+This project comes from a desire to learn how to build applications on AWS, and a practical need to understand the attack surface of an organisation as a function of time. This initial, very basic release does domain enumeration periodically with effectively indefinite persistence of results. This will hopefully serves as a helpful baseline for dcata analysis.
 
 ## Overall Architecture and CICD
 AWS helpfully [explains](https://docs.aws.amazon.com/whitepapers/latest/organizing-your-aws-environment/organizing-your-aws-environment.pdf?did=wp_card&trk=wp_card) how we should segment large Organisations into multiple Accounts, and I have used a similar architecture for this project. Specifically:
 
-* I have production and non-production workloads in their own accounts.
+* I have production and non-production workloads in their own accounts; and
 * The CICD pipeline and associated components are also has its own acccount.
-* The DNS infrastructure, given its shared nature, also has its own account.
 
 The pipeline itself comprises a source stage in Github, a build step followed by a deployment to a non-production (I refer to it herein as *devtest*) environment, and finally: deployment to production. 
 
 ## The App
-* Fundamentally: recon-ng with a custom workflow run from the shell of a EC2 Instance created for the task. I could not figure out how to make recon-ng serverless, and so I've done what I hope is the next best thing:
+Fundamentally: recon-ng with a custom workflow run from the shell of a EC2 Instance created for the task. I could not figure out how to make recon-ng serverless, and so I've done what I hope is the next best thing:
 
 * An EC2 Instance which is configured to launch, install recon-ng, clone this rpo, set up cron, set up some environment variables, then stop.
-* A scheduled eventbridge task that invokes a Lambda, which itself boots the previously launched EC2 Instance. This act causes the enumeration script to run, resulting in a CSV file which is copied to S3 and then deleted locally. That EC2 Instance is then stopped (because I am cheap).
+* A scheduled eventbridge task that invokes a Lambda, which itself starts the previously launched EC2 Instance. This act causes the enumeration script to run, resulting in a CSV file which is copied to S3 and then deleted locally. That EC2 Instance is then stopped (because I am cheap / frugal).
 * S3 event notifications then cause another Lambda to invoke, which parses the file, loads contents into a Dynamo DB table, then deletes the CSV file.
 
 ## Instructions
