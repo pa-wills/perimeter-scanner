@@ -153,7 +153,7 @@ Resources:
             Action: 
               - "sts:AssumeRole"
       ManagedPolicyArns:
-        - AmazonSSMManagedInstanceCore
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       Path: "/"
 
   WorkerInstanceRolePolicy:
