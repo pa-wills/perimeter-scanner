@@ -152,6 +152,8 @@ Resources:
                 - "ec2.amazonaws.com"
             Action: 
               - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - AmazonSSMManagedInstanceCore
       Path: "/"
 
   WorkerInstanceRolePolicy:
