@@ -193,10 +193,13 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       GlobalSecondaryIndexes:
         - 
-          IndexName: host-datetime-index
+          IndexName: host-datetime-index # I have to trick it in order to overcome recent deletion, hence "2"
           KeySchema:
             -
               AttributeName: "host"
+              KeyType: "HASH"
+            -
+              AttributeName: "datetime"
               KeyType: "HASH"
           Projection:
             ProjectionType: ALL
@@ -313,12 +316,79 @@ Resources:
       Timeout: 20
 
   onPopulateHostsOfInterestTable:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'The function that constructs the Hosts of Interest Table.'
+      Environment:
+        Variables:
+          DYNAMODB_TTL_OFFSET:
+            Ref: DynamoDbRetentionPeriod
+          TABLE_NAME_RESULTS:
+            Ref: ResultsTableHosts
+          TABLE_NAME_HOSTS_OF_INTEREST:
+            Ref: DerivedTableHostsOfInterest
 
+      InlineCode: |
 
-      MemorySize: 256
+        from boto3.dynamodb.conditions import Key
+
+        import boto3
+        import json
+        import os
+
+        resultsTableName = os.environ.get('TABLE_NAME_RESULTS')
+        hostsOfInterestTableName = os.environ.get('TABLE_NAME_HOSTS_OF_INTEREST')
+
+        # resultsTableName = "PerimeterScanner-DevTest-ResultsTableHosts-GIMUXGIF94Z4"
+        # hostsOfInterestTableName = "PerimeterScanner-DevTest-ResultsTableHostsOfInterest-GIMUXGIF94Z4"
+
+        def handler(event, context):
+          dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
+          resultsTable = dynamodb.Table(resultsTableName)
+          hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName)
+    
+          # Step 1: get all the unique host names.
+          responseScan = resultsTable.scan()
+          items = responseScan["Items"]
+          hosts = []
+          for item in items:
+            hosts.append(item["host"])
+          hosts = list(dict.fromkeys(hosts))
+          for host in hosts:
+            responseInsert = hostsOfInterestTable.put_item(
+              Item = {
+                "host" : host
+              }
+            )
+        
+          # Step 2: Get the datetime of the first and last values of each host.
+          for host in hosts:
+            responseQuery = resultsTable.query(
+              IndexName = "host-datetime-index",
+              KeyConditionExpression = Key("host").eq(str(host))
+            )
+            responseUpdate = hostsOfInterestTable.update_item(
+              Key = {
+                "host" : host
+              },
+              UpdateExpression = "set DatetimeFirst = :r, DatetimeLast = :s",
+              ExpressionAttributeValues = {
+                ":r": responseQuery["Items"][0]["datetime"],
+                ":s": responseQuery["Items"][len(responseQuery["Items"]) - 1]["datetime"]
+              }
+            )
+        
+          return {
+            'statusCode': 200,
+            'body': json.dumps('Hello from Lambda!'),
+            'count': len(hosts) #,
+          }
+
+      MemorySize: 1024
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
       Runtime: python3.9
-      Timeout: 20
+      Timeout: 60
 
 
   onArrivalOfResultsExecutionRole:
@@ -389,16 +459,11 @@ Resources:
               - 'dynamodb:Scan'
             Resource: 
               - !GetAtt ResultsTableHosts.Arn
-              - !Join
-                - ""
-                - - !GetAtt ResultsTableHosts.Arn
-                  - "/index/*"
           - Effect: Allow
             Action: 
               - 'dynamodb:PutItem'
               - 'dynamodb:UpdateItem'
-            Resource: 
-              - !GetAtt DerivedTableHostsOfInterest.Arn
+            Resource: !GetAtt DerivedTableHostsOfInterest.Arn
       Roles:
         - !Ref onPopulateHostsOfInterestTableExecutionRole
 
