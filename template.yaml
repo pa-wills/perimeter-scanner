@@ -213,7 +213,7 @@ Resources:
       KeySchema:
         -
           AttributeName: "host"
-          KeyType: "RANGE"
+          KeyType: "HASH"
       TimeToLiveSpecification:
         AttributeName: "ttl"
         Enabled: true
