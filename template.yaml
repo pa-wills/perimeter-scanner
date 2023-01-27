@@ -197,9 +197,6 @@ Resources:
           KeySchema:
             -
               AttributeName: "host"
-              KeyType: "RANGE"
-            -
-              AttributeName: "datetime"
               KeyType: "HASH"
           Projection:
             ProjectionType: ALL
