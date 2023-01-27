@@ -200,7 +200,7 @@ Resources:
               KeyType: "HASH"
             -
               AttributeName: "datetime"
-              KeyType: "HASH"
+              KeyType: "RANGE"
           Projection:
             ProjectionType: ALL
       KeySchema:
