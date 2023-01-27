@@ -455,6 +455,10 @@ Resources:
         Statement:
           - Effect: Allow
             Action:
+              - 'dynamodb:DescribeStream'
+              - 'dynamodb:GetRecords'
+              - 'dynamodb:GetShardIterator'
+              - 'dynamodb:ListStreams'
               - 'dynamodb:Query'
               - 'dynamodb:Scan'
             Resource: 
@@ -463,6 +467,10 @@ Resources:
                 - ''
                 - - !GetAtt ResultsTableHosts.Arn
                   - '/index/*'
+              - !Join
+                - ''
+                - - !GetAtt ResultsTableHosts.Arn
+                  - '/stream/*'
           - Effect: Allow
             Action: 
               - 'dynamodb:PutItem'
