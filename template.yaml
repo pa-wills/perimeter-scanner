@@ -202,6 +202,23 @@ Resources:
         AttributeName: "ttl"
         Enabled: true
 
+  DerivedTableHostsOfInterest:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        -
+          AttributeName: "host"
+          AttributeType: "S"
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        -
+          AttributeName: "host"
+          KeyType: "RANGE"
+      TimeToLiveSpecification:
+        AttributeName: "ttl"
+        Enabled: true
+
+
   onArrivalOfResults:
     Type: AWS::Serverless::Function
     Properties:
@@ -286,6 +303,83 @@ Resources:
       Runtime: python3.9
       Timeout: 20
 
+  onPopulateHostsOfInterestTable:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'The function that constructs the Hosts of Interest Table.'
+      Environment:
+        Variables:
+          DYNAMODB_TTL_OFFSET:
+            Ref: DynamoDbRetentionPeriod
+          TABLE_NAME_RESULTS:
+            Ref: ResultsTableHosts
+          TABLE_NAME_HOSTS_OF_INTEREST:
+            Ref: DerivedTableHostsOfInterest
+
+      InlineCode: |
+
+        from boto3.dynamodb.conditions import Key
+
+        import boto3
+        import json
+
+        resultsTableName = os.environ.get('TABLE_NAME_RESULTS')
+        hostsOfInterestTableName = os.environ.get('TABLE_NAME_HOSTS_OF_INTEREST')
+
+        # resultsTableName = "PerimeterScanner-DevTest-ResultsTableHosts-GIMUXGIF94Z4"
+        # hostsOfInterestTableName = "PerimeterScanner-DevTest-ResultsTableHostsOfInterest-GIMUXGIF94Z4"
+
+        def handler(event, context):
+          dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
+          resultsTable = dynamodb.Table(resultsTableName) # TODO: parameterize this.
+          hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName) # TODO: parameterize this.
+    
+          # Step 1: get all the unique host names.
+          responseScan = resultsTable.scan()
+          items = responseScan["Items"]
+          hosts = []
+          for item in items:
+            hosts.append(item["host"])
+          hosts = list(dict.fromkeys(hosts))
+          for host in hosts:
+            responseInsert = hostsOfInterestTable.put_item(
+              Item = {
+                "host" : host
+              }
+            )
+        
+          # Step 2: Get the datetime of the first and last values of each host.
+          for host in hosts:
+            responseQuery = resultsTable.query(
+              IndexName = "host-datetime-index",
+              KeyConditionExpression = Key("host").eq(str(host))
+            )
+            responseUpdate = hostsOfInterestTable.update_item(
+              Key = {
+                "host" : host
+              },
+              UpdateExpression = "set DatetimeFirst = :r, DatetimeLast = :s",
+              ExpressionAttributeValues = {
+                ":r": responseQuery["Items"][0]["datetime"],
+                ":s": responseQuery["Items"][len(responseQuery["Items"]) - 1]["datetime"]
+              }
+            )
+        
+          return {
+            'statusCode': 200,
+            'body': json.dumps('Hello from Lambda!'),
+            'count': len(hosts) #,
+          }
+
+
+
+      MemorySize: 256
+      Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 20
+
+
   onArrivalOfResultsExecutionRole:
     Type: "AWS::IAM::Role"
     Properties: 
@@ -306,7 +400,7 @@ Resources:
   onArrivalOfResultsExecutionRolePolicy:
     Type: 'AWS::IAM::Policy'
     Properties:
-      PolicyName: policyToAllowAccessToS3andDyDB
+      PolicyName: policyForOnArrivalOfResultsExecutionRole
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -323,6 +417,44 @@ Resources:
                 - /*
       Roles:
         - !Ref onArrivalOfResultsExecutionRole
+
+  onPopulateHostsOfInterestTableExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
+      Path: "/"
+
+  onPopulateHostsOfInterestTableExecutionRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: policyForOnPopulateHostsOfInterestTableExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'dynamodb:Query'
+              - 'dynamodb:Scan'
+            Resource: 
+              - !GetAtt ResultsTableHosts.Arn
+          - Effect: Allow
+            Action: 
+              - 'dynamodb:PutItem'
+              - 'dynamodb:UpdateItem'
+            Resource: !GetAtt DerivedTableHostsOfInterest.Arn
+      Roles:
+        - !Ref onPopulateHostsOfInterestTableExecutionRole
 
 
   startEc2Instance:
