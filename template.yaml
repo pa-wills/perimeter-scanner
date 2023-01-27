@@ -191,6 +191,17 @@ Resources:
           AttributeName: "host"
           AttributeType: "S"
       BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - 
+          IndexName: host-datetime-index
+          KeySchema:
+            -
+              AttributeName: "host"
+              KeyType: "RANGE"
+            -
+              AttributeName: "datetime"
+              KeyType: "HASH"
+
       KeySchema:
         -
           AttributeName: "datetime"
@@ -333,8 +344,8 @@ Resources:
 
         def handler(event, context):
           dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
-          resultsTable = dynamodb.Table(resultsTableName) # TODO: parameterize this.
-          hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName) # TODO: parameterize this.
+          resultsTable = dynamodb.Table(resultsTableName)
+          hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName)
     
           # Step 1: get all the unique host names.
           responseScan = resultsTable.scan()
