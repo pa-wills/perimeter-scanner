@@ -201,7 +201,8 @@ Resources:
             -
               AttributeName: "datetime"
               KeyType: "HASH"
-
+          Projection:
+            ProjectionType: ALL
       KeySchema:
         -
           AttributeName: "datetime"
@@ -383,8 +384,6 @@ Resources:
             'body': json.dumps('Hello from Lambda!'),
             'count': len(hosts) #,
           }
-
-
 
       MemorySize: 1024
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
