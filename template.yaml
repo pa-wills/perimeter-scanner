@@ -374,10 +374,10 @@ Resources:
 
 
 
-      MemorySize: 256
+      MemorySize: 1024
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
       Runtime: python3.9
-      Timeout: 20
+      Timeout: 60
 
 
   onArrivalOfResultsExecutionRole:
