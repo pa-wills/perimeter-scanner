@@ -459,6 +459,10 @@ Resources:
               - 'dynamodb:Scan'
             Resource: 
               - !GetAtt ResultsTableHosts.Arn
+              - !Join
+                - ''
+                - - !Ref ResultsTableHosts.Arn
+                  - '/index/*'
           - Effect: Allow
             Action: 
               - 'dynamodb:PutItem'
