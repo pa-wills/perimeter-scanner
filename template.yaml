@@ -323,6 +323,7 @@ Resources:
 
         import boto3
         import json
+        import os
 
         resultsTableName = os.environ.get('TABLE_NAME_RESULTS')
         hostsOfInterestTableName = os.environ.get('TABLE_NAME_HOSTS_OF_INTEREST')
