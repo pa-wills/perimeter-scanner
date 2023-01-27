@@ -461,7 +461,7 @@ Resources:
               - !GetAtt ResultsTableHosts.Arn
               - !Join
                 - ''
-                - - !Ref ResultsTableHosts.Arn
+                - - !GetAtt ResultsTableHosts.Arn
                   - '/index/*'
           - Effect: Allow
             Action: 
