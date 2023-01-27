@@ -193,13 +193,10 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       GlobalSecondaryIndexes:
         - 
-          IndexName: host-datetime-index-2 # I have to trick it in order to overcome recent deletion, hence "2"
+          IndexName: host-datetime-index # I have to trick it in order to overcome recent deletion, hence "2"
           KeySchema:
             -
               AttributeName: "host"
-              KeyType: "RANGE"
-            -
-              AttributeName: "datetime"
               KeyType: "HASH"
           Projection:
             ProjectionType: ALL
