@@ -261,18 +261,32 @@ Resources:
         def handler(event, context):
           dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
           hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName)
-    
+
           for record in event["Records"]:
             if record["eventName"] != "INSERT": 
               continue
-            print("host: " + str(record["dynamodb"]["Keys"]["host"]["S"]) + ", datetime: " + str(record["dynamodb"]["Keys"]["datetime"]["S"]) + ".")
             responseQuery = hostsOfInterestTable.query(
               KeyConditionExpression = Key("host").eq(str(record["dynamodb"]["Keys"]["host"]["S"]))
             )
-            print(responseQuery)
-            # If the Query returns zero results then it's a put_item, otherwise it's an update_item.
-        
-            print("\n\n")
+            datetimeString = str(datetime.datetime.now().isoformat())
+            if (responseQuery["Items"] == []):
+              hostsOfInterestTable.put_item(
+                Item = {
+                  "host": str(record["dynamodb"]["Keys"]["host"]["S"]),
+                  "DatetimeFirst": datetimeString,
+                  "DatetimeLast": datetimeString
+                }
+              )
+            else:
+              hostsOfInterestTable.update_item(
+                Key = {
+                  "host": str(record["dynamodb"]["Keys"]["host"]["S"])
+                },
+                UpdateExpression = "set DatetimeLast = :r",
+                ExpressionAttributeValues = {
+                  ":r": datetimeString
+                }
+              )
 
       MemorySize: 256
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
