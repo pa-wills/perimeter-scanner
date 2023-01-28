@@ -510,6 +510,7 @@ Resources:
               - 'dynamodb:Query'
               - 'dynamodb:Scan'
             Resource: 
+              - !GetAtt DerivedTableHostsOfInterest.Arn
               - !GetAtt ResultsTableHosts.Arn
               - !Join
                 - ''
