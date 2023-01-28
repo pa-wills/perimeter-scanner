@@ -232,7 +232,7 @@ Resources:
         AttributeName: "ttl"
         Enabled: true
 
-  onArrivalOfHostsArrivalStreamEvent:
+  onArrivalOfHostsStreamEvent:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
@@ -254,7 +254,7 @@ Resources:
 
 
       MemorySize: 256
-      Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
+      Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
       Runtime: python3.9
       Timeout: 20
 
