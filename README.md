@@ -17,7 +17,8 @@ Fundamentally: recon-ng with a custom workflow run from the shell of a EC2 Insta
 
 * An EC2 Instance which is configured to launch, install recon-ng, clone this rpo, set up cron, set up some environment variables, then stop.
 * A scheduled eventbridge task that invokes a Lambda, which itself starts the previously launched EC2 Instance. This act causes the enumeration script to run, resulting in a CSV file which is copied to S3 and then deleted locally. That EC2 Instance is then stopped (because I am cheap / frugal).
-* S3 event notifications then cause another Lambda to invoke, which parses the file, loads contents into a Dynamo DB table, then deletes the CSV file.
+* S3 event notifications then cause another Lambda to invoke, which parses the file, loads contents into a DynamoDB table, then deletes the CSV file.
+* A secondary DynamoDB table that summarises when hosts were first detected and most recently detected.
 
 ## Instructions
 1. Deploy the *[crossAccountRoles](crossAccountRoles.yaml)* stack to the Accounts you intend to use for production and devtest.
