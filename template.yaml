@@ -210,6 +210,8 @@ Resources:
         -
           AttributeName: "host"
           KeyType: "RANGE"
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
       TimeToLiveSpecification:
         AttributeName: "ttl"
         Enabled: true
@@ -230,6 +232,31 @@ Resources:
         AttributeName: "ttl"
         Enabled: true
 
+  onArrivalOfHostsArrivalStreamEvent:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'The function that updates the Hosts of Interest table.'
+      Events:
+        DyDbEvent:
+          Type: DynamoDB
+          Properties:
+            StartingPosition: LATEST
+            Stream:
+              !GetAtt ResultsTableHosts.StreamArn
+      InlineCode: |
+        import boto3
+        import datetime
+        import json
+        import os
+
+        def handler(event, context):
+
+
+      MemorySize: 256
+      Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 20
 
   onArrivalOfResults:
     Type: AWS::Serverless::Function
