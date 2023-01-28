@@ -237,6 +237,10 @@ Resources:
     Properties:
       Handler: index.handler
       Description: 'The function that updates the Hosts of Interest table.'
+      Environment:
+        Variables:
+          TABLE_NAME_HOSTS_OF_INTEREST:
+            Ref: DerivedTableHostsOfInterest
       Events:
         DyDbEvent:
           Type: DynamoDB
@@ -245,13 +249,30 @@ Resources:
             Stream:
               !GetAtt ResultsTableHosts.StreamArn
       InlineCode: |
+        from boto3.dynamodb.conditions import Key
+
         import boto3
         import datetime
         import json
         import os
 
-        def handler(event, context):
+        hostsOfInterestTableName = os.environ.get("TABLE_NAME_HOSTS_OF_INTEREST")
 
+        def handler(event, context):
+          dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
+          hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName)
+    
+          for record in event["Records"]:
+            if record["eventName"] != "INSERT": 
+              continue
+            print("host: " + str(record["dynamodb"]["Keys"]["host"]["S"]) + ", datetime: " + str(record["dynamodb"]["Keys"]["datetime"]["S"]) + ".")
+            responseQuery = hostsOfInterestTable.query(
+              KeyConditionExpression = Key("host").eq(str(record["dynamodb"]["Keys"]["host"]["S"]))
+            )
+            print(responseQuery)
+            # If the Query returns zero results then it's a put_item, otherwise it's an update_item.
+        
+            print("\n\n")
 
       MemorySize: 256
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
