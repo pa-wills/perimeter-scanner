@@ -414,7 +414,7 @@ Resources:
           responseScan = resultsTable.scan()
           items = responseScan["Items"]
           while 'LastEvaluatedKey' in responseScan:
-            responseScan = sourceTable.scan(ExclusiveStartKey = responseScan['LastEvaluatedKey'])
+            responseScan = resultsTable.scan(ExclusiveStartKey = responseScan['LastEvaluatedKey'])
             items.extend(responseScan["Items"])
           hosts = []
           for item in items:
