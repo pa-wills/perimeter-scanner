@@ -413,6 +413,9 @@ Resources:
           # Step 1: get all the unique host names.
           responseScan = resultsTable.scan()
           items = responseScan["Items"]
+          while 'LastEvaluatedKey' in responseScan:
+            responseScan = sourceTable.scan(ExclusiveStartKey = responseScan['LastEvaluatedKey'])
+            items.extend(responseScan["Items"])
           hosts = []
           for item in items:
             hosts.append(item["host"])
