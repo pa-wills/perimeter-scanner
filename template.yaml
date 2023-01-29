@@ -210,6 +210,8 @@ Resources:
         -
           AttributeName: "host"
           KeyType: "RANGE"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       StreamSpecification:
         StreamViewType: NEW_IMAGE
       TimeToLiveSpecification:
