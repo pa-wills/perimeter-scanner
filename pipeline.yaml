@@ -141,7 +141,7 @@ Resources:
         Actions:
         - Name: devtest-create-update-stack
           InputArtifacts:
-          - Name: "SourceArtifact"
+          - Name: "BuildArtifact"
           ActionTypeId:
             Category: Deploy
             Owner: AWS
@@ -162,7 +162,7 @@ Resources:
         Actions:
         - Name: production-create-update-stack
           InputArtifacts:
-          - Name: "SourceArtifact"
+          - Name: "BuildArtifact"
           ActionTypeId:
             Category: Deploy
             Owner: AWS
@@ -192,7 +192,7 @@ Resources:
         EnvironmentVariables:
           - Name: S3_BUCKET
             Value: !Ref PipelineOutputBucket
-        Image: "aws/codebuild/standard:6.0" # Using a modern image, matters. Got stuck on this for ages.
+        Image: "aws/codebuild/standard:5.0" # Using a modern image, matters. Got stuck on this for ages.
         Type: LINUX_CONTAINER
       ServiceRole: !GetAtt
         - CodeBuildTrustRole

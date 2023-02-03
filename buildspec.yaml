@@ -13,7 +13,7 @@ version: 0.2 # Turns out this matters - https://docs.aws.amazon.com/codebuild/la
 phases:
   install:
     runtime-versions:
-      python: 3.10 # Codebuild image doesn't seem to like 3.9.... which is a bummer because that's the version lambda wants.
+      python: 3.9 
 
   build:
     commands:
