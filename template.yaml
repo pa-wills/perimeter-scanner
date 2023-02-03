@@ -237,7 +237,7 @@ Resources:
   onArrivalOfHostsStreamEvent:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUrl: .
+      CodeUri: .
       Description: 'The function that updates the Hosts of Interest table.'
       Environment:
         Variables:
@@ -259,7 +259,7 @@ Resources:
   onArrivalOfResults:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUrl: .
+      CodeUri: .
       Description: 'The function that parses the results, uploads them.'
       Environment:
         Variables:
@@ -288,7 +288,7 @@ Resources:
   onPopulateHostsOfInterestTable:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUrl: .
+      CodeUri: .
       Description: 'The function that constructs the Hosts of Interest Table.'
       Environment:
         Variables:
