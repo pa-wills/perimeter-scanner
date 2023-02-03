@@ -193,6 +193,7 @@ Resources:
           - Name: S3_BUCKET
             Value: !Ref PipelineOutputBucket
         Image: "aws/codebuild/amazonlinux2-x86_64-standard:4.0" # Using a modern image, matters. Got stuck on this for ages.
+        PrivilegedMode: true
         Type: LINUX_CONTAINER
       ServiceRole: !GetAtt
         - CodeBuildTrustRole
