@@ -1,0 +1,30 @@
+# Kudos to:
+
+# https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+# And... we're assuming Ubuntu.
+
+version: 0.2 # Turns out this matters - https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html#build-spec-ref-versions
+
+env:
+  variables:
+
+# Phase definitions: https://aws.amazon.com/blogs/apn/an-introduction-to-aws-codebuild/
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+
+  build:
+    commands:
+      - sam build
+      - sam package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml --force-upload
+
+      # TODO: sort out the building of the container-based lambda.
+      
+
+artifacts:
+  base-directory: "website/hugo/quickstart/public"
+  discard-paths: no
+  files:
+    - "**/*"

@@ -122,7 +122,22 @@ Resources:
             BranchName: !Ref GitHubRepoBranch
             OutputArtifactFormat: "CODE_ZIP"
           RunOrder: 1
-      - Name: BuildAndTest
+      - Name: Build
+        Actions:
+        - Name: build
+          InputArtifacts:
+          - Name: "SourceArtifact"
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Version: "1"
+            Provider: CodeBuild
+          OutputArtifacts:
+          - Name: "BuildArtifact"
+          Configuration:
+            ProjectName: !Ref CodeBuildProject
+          RunOrder: 1
+      - Name: DevTest
         Actions:
         - Name: devtest-create-update-stack
           InputArtifacts:
@@ -164,6 +179,28 @@ Resources:
             TemplatePath: "SourceArtifact::template.yaml"
           RoleArn: !Ref ProductionCodePipelineRoleArn
           RunOrder: 1
+
+  CodeBuildProject:
+    DependsOn: [PipelineOutputBucket]
+    Description: This is the build sub-stage.
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: S3_BUCKET
+            Value: !Ref PipelineOutputBucket
+        Image: "aws/codebuild/standard:6.0" # Using a modern image, matters. Got stuck on this for ages.
+        Type: LINUX_CONTAINER
+      ServiceRole: !GetAtt
+        - CodeBuildTrustRole
+        - Arn
+      Source:
+        BuildSpec: "buildspec.yml"
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 5
 
   PipelineOutputBucket:
     Type: AWS::S3::Bucket
@@ -326,6 +363,33 @@ Resources:
     DependsOn: PipelineOutputBucket
 
   # </copy>
+
+  CodeBuildTrustRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [codebuild.amazonaws.com]
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: CodeBuildRolePolicy # TODO: Use intrinsic function
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+                Resource: ["*"]
+              - Effect: Allow
+                Action:
+                  - 'events:*'
+                  - 'iam:*'
+                  - 's3:*'
+                  - 'cloudformation:*'
+                Resource: '*'
 
   CodePipelineServiceRole:
     Type: 'AWS::IAM::Role'
