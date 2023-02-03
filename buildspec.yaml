@@ -24,7 +24,7 @@ phases:
       
 
 artifacts:
-  base-directory: "website/hugo/quickstart/public"
-  discard-paths: no
+#  base-directory: "website/hugo/quickstart/public"
+#  discard-paths: no
   files:
     - "**/*"
