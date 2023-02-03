@@ -223,6 +223,27 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
+  PipelineOutputRegistry:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryPolicyText: 
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: AllowCodeBuildToPush
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Ref CodeBuildTrustRole
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:PutImage"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:UploadLayerPart"
+              - "ecr:CompleteLayerUpload"
+
   # https://stackoverflow.com/questions/48362572/aws-codepipeline-error-cross-account-pass-role-is-not-allowed
   # This bucket needs to be accessible from the destination accounts.
   PipelineOutputBucketPolicy:
