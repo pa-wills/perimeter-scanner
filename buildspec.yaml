@@ -23,6 +23,7 @@ phases:
 
       # TODO: sort out the building of the container-based lambda.
       - cd scanHosts
+      - systemctl start docker
       - docker build -t test .
       - docker tag test:latest 494507141278.dkr.ecr.ap-southeast-2.amazonaws.com/test:latest
       - docker push 494507141278.dkr.ecr.ap-southeast-2.amazonaws.com/test:latest
