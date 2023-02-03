@@ -193,7 +193,7 @@ Resources:
           - Name: S3_BUCKET
             Value: !Ref PipelineOutputBucket
         Image: "aws/codebuild/amazonlinux2-x86_64-standard:4.0" # Using a modern image, matters. Got stuck on this for ages.
-        PrivilegedMode: true
+        PrivilegedMode: true # This has to be set, because we're making docker containers.
         Type: LINUX_CONTAINER
       ServiceRole: !GetAtt
         - CodeBuildTrustRole
@@ -284,8 +284,6 @@ Resources:
               - "*"
       KeySpec: SYMMETRIC_DEFAULT
       KeyUsage: ENCRYPT_DECRYPT
-
-
 
   # Copying someone else's example of the common bucket cleaning scenario, for Lambda custom resources.
   # https://github.com/mike-mosher/custom-resource-s3-bucket-delete/blob/master/custom-resource.yml
@@ -386,10 +384,11 @@ Resources:
                 Resource: ["*"]
               - Effect: Allow
                 Action:
+                  - 'cloudformation:*'
+                  - 'ecr:*'
                   - 'events:*'
                   - 'iam:*'
                   - 's3:*'
-                  - 'cloudformation:*'
                 Resource: '*'
 
   CodePipelineServiceRole:
