@@ -21,7 +21,10 @@ phases:
       - sam package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml --force-upload
 
       # TODO: sort out the building of the container-based lambda.
-      
+      - cd scanHosts
+      - docker build -t test
+      - docker tag test:latest 494507141278.dkr.ecr.ap-southeast-2.amazonaws.com/test:latest
+      - docker push 494507141278.dkr.ecr.ap-southeast-2.amazonaws.com/test:latest
 
 artifacts:
 #  base-directory: "website/hugo/quickstart/public"

@@ -155,7 +155,7 @@ Resources:
             ChangeSetName: pipeline-changeset-devtest
             ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "KeyPairName": "pw-devtest"}'
             RoleArn: !Ref DevTestCfnRoleArn
-            TemplatePath: "SourceArtifact::template.yaml"
+            TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref DevTestCodePipelineRoleArn
           RunOrder: 1
       - Name: Production
