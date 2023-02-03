@@ -198,7 +198,7 @@ Resources:
         - CodeBuildTrustRole
         - Arn
       Source:
-        BuildSpec: "buildspec.yml"
+        BuildSpec: "buildspec.yaml"
         Type: CODEPIPELINE
       TimeoutInMinutes: 5
 
