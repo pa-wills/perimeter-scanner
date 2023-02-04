@@ -234,7 +234,7 @@ Resources:
             Effect: Allow
             Principal:
               AWS:
-                - !Ref CodeBuildTrustRole
+                - * # TODO: This needs to be least-priv'd.
             Action:
               - "ecr:GetDownloadUrlForLayer"
               - "ecr:BatchGetImage"
