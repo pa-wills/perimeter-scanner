@@ -190,6 +190,8 @@ Resources:
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         EnvironmentVariables:
+          - Name: ECR_REPO
+            Value: !Ref PipelineOutputRegistry
           - Name: S3_BUCKET
             Value: !Ref PipelineOutputBucket
         Image: "aws/codebuild/amazonlinux2-x86_64-standard:4.0" # Using a modern image, matters. Got stuck on this for ages.
@@ -231,10 +233,8 @@ Resources:
         Statement:
           -
             Sid: AllowCodeBuildToPush
-            Effect: Allow
-            Principal:
-              AWS:
-                - * # TODO: This needs to be least-priv'd.
+            Effect: "Allow"
+            Principal: "*" # TODO: This needs to be least-priv'd.
             Action:
               - "ecr:GetDownloadUrlForLayer"
               - "ecr:BatchGetImage"
