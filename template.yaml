@@ -287,10 +287,17 @@ Resources:
 
   onNmap:
     Type: AWS::Serverless::Function # Gambit, using Serverless possibly forces the build (which we've already done)
+    Metadata:
+      DockerContext: "./scanHosts"
+      Dockerfile: "Dockerfile"
+
     Properties:
 
+      CodeUri: scanHost
+      Handler: app.handler
+
       # TODO: Ugliest hack ever. Fix once demonstrated.
-      ImageUri: "623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest"
+ #     ImageUri: "623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest"
 
       PackageType: Image
       Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
@@ -299,6 +306,9 @@ Resources:
 
   onPopulateHostsOfInterestTable:
     Type: AWS::Serverless::Function
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./scanHosts
     Properties:
       CodeUri: .
       Description: 'The function that constructs the Hosts of Interest Table.'
