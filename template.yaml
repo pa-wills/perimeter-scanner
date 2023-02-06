@@ -299,7 +299,7 @@ Resources:
       ImageUri: "623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest"
 
       PackageType: Image
-      Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
+      Role: !GetAtt onNmapExecutionRole.Arn
       Timeout: 20
 
   onPopulateHostsOfInterestTable:
@@ -361,6 +361,37 @@ Resources:
                 - /*
       Roles:
         - !Ref onArrivalOfResultsExecutionRole
+
+  onNmapExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
+      Path: "/"
+
+  onNmapExecutionRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: policyForOnPopulateHostsOfInterestTableExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ecr:*' # TODO: tighten, for least priv.
+            Resource: "*"
+      Roles:
+        - !Ref onNmapExecutionRole
 
   onPopulateHostsOfInterestTableExecutionRole:
     Type: "AWS::IAM::Role"
