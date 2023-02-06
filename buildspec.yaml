@@ -21,7 +21,7 @@ phases:
       - sam build
 
       # TODO: ugly hack with the --image-repository switch. fix.
-      - sam package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml --force-upload # --image-repository perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp
+      - sam package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml --force-upload  --image-repository perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp
 
 #      - cd scanHosts
 #      - aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com
