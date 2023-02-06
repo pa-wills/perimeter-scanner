@@ -286,13 +286,12 @@ Resources:
       Timeout: 20
 
   onNmap:
-    Type: AWS::Lambda::Function # Gambit, using Serverless possibly forces the build (which we've already done)
+    Type: AWS::Serverless::Function # Gambit, using Serverless possibly forces the build (which we've already done)
     Properties:
 
       # TODO: Ugliest hack ever. Fix once demonstrated.
-      Code:
-        ImageUri: "623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest"
-        
+      ImageUri: "623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest"
+
       PackageType: Image
       Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
       Runtime: python3.9
