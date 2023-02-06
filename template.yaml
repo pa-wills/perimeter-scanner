@@ -297,7 +297,7 @@ Resources:
       Handler: app.handler
 
       # TODO: Ugliest hack ever. Fix once demonstrated.
- #     ImageUri: "623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest"
+      ImageUri: "623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest"
 
       PackageType: Image
       Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
