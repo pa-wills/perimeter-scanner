@@ -285,6 +285,18 @@ Resources:
       Runtime: python3.9
       Timeout: 20
 
+  onNmap:
+    Type: AWS::Serverless::Function
+    Properties:
+
+      # TODO: Ugliest hack ever. Fix once demonstrated.
+      ImageUri: "623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest"
+
+      PackageType: Image
+      Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 20
+
   onPopulateHostsOfInterestTable:
     Type: AWS::Serverless::Function
     Properties:
