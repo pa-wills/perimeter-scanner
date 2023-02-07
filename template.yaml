@@ -28,6 +28,9 @@ Parameters:
   KeyPairName:
     Description: "Please provide the name of the key pair corresponding to the EC2 worker"
     Type: String
+  EcrRepoArn:
+    Description: "Please provide the ARN of the ECR repo in which the build containers are stored"
+    Type: String
   EcrRepoUri:
     Description: "Please provide the URI of the ECR repo in which the build containers are stored"
     Type: String
@@ -390,7 +393,7 @@ Resources:
           - Effect: Allow
             Action:
               - 'ecr:*' # TODO: tighten, for least priv.
-            Resource: "*"
+            Resource: !Ref EcrRepoArn
       Roles:
         - !Ref onNmapExecutionRole
 
