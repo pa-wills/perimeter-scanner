@@ -234,7 +234,7 @@ Resources:
           -
             Sid: AllowCodeBuildToPush
             Effect: "Allow"
-            Principal: "*" # TODO: This needs to be least-priv'd.
+            Principal: "*" # TODO: least-priv this.
             Action:
               - "ecr:GetDownloadUrlForLayer"
               - "ecr:BatchGetImage"
@@ -243,6 +243,14 @@ Resources:
               - "ecr:InitiateLayerUpload"
               - "ecr:UploadLayerPart"
               - "ecr:CompleteLayerUpload"
+          - 
+            Sid: LambdaECRImageCrossAccountRetrievalPolicy
+            Effect: Allow
+            Action:
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+            Principal:
+              Service: lambda.amazonaws.com
 
   # https://stackoverflow.com/questions/48362572/aws-codepipeline-error-cross-account-pass-role-is-not-allowed
   # This bucket needs to be accessible from the destination accounts.
