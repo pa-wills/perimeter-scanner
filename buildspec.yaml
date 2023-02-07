@@ -14,7 +14,7 @@ phases:
   install:
     runtime-versions:
       docker: 20
-      python: 3.9 
+      python: 3.9
 
   build:
     commands:
@@ -23,14 +23,6 @@ phases:
       # TODO: ugly hack with the --image-repository switch. fix.
       - sam package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml --force-upload  --image-repository 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp
 
-#      - cd scanHosts
-#      - aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com
-#      - docker build -t $ECR_REPO .
-#      - docker tag $ECR_REPO:latest 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPO:latest
-#     - docker push 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPO:latest
-
 artifacts:
-#  base-directory: "website/hugo/quickstart/public"
-#  discard-paths: no
   files:
     - "**/*"
