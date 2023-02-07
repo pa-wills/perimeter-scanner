@@ -28,6 +28,9 @@ Parameters:
   KeyPairName:
     Description: "Please provide the name of the key pair corresponding to the EC2 worker"
     Type: String
+  EcrRepoUri:
+    Description: "Please provide the URI of the ECR repo in which the build containers are stored"
+    Type: String
 
 Metadata:
   AWS::CloudFormation::Interface: 
