@@ -190,8 +190,8 @@ Resources:
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         EnvironmentVariables:
-          - Name: ECR_REPO
-            Value: !Ref PipelineOutputRegistry
+          - Name: ECR_REPO_URI
+            Value: !GetAtt PipelineOutputRegistry.RepositoryUri
           - Name: S3_BUCKET
             Value: !Ref PipelineOutputBucket
         Image: "aws/codebuild/amazonlinux2-x86_64-standard:4.0" # Using a modern image, matters. Got stuck on this for ages.
