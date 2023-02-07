@@ -153,7 +153,7 @@ Resources:
             StackName: PerimeterScanner-DevTest # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-devtest
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "KeyPairName": "pw-devtest", "imageUri": "${GitHubPersonalAccessToken}"}'
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "KeyPairName": "pw-devtest"}'
             RoleArn: !Ref DevTestCfnRoleArn
             TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref DevTestCodePipelineRoleArn
