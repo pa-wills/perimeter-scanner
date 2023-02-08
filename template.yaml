@@ -460,8 +460,6 @@ Resources:
       Runtime: python3.9
       Timeout: 60
 
-SchedulePopulateWorkQueuePeriodicityParameter
-
   onArrivalOfResultsExecutionRole:
     Type: "AWS::IAM::Role"
     Properties: 
