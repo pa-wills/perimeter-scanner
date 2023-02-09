@@ -29,15 +29,14 @@ def handler(event, context):
     receiptHandle = message['ReceiptHandle']
 
  
-    nm = nmap.PortScanner()
-    stuff = nm.scan('peterwills.com', '22-443')
+#    nm = nmap.PortScanner()
+#    stuff = nm.scan('peterwills.com', '22-443')
 
     # TODO: Nmap said host.
     # TODO: Write required messages to table.
 
     # TODO: Delete message from queue.
     response = client.delete_message(QueueUrl = workQueueName, ReceiptHandle = receiptHandle)
-
 
     return {
         'statusCode': 200,
