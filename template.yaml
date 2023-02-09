@@ -352,7 +352,7 @@ Resources:
           TABLE_NAME_HOSTS_OF_INTEREST:
             Ref: DerivedTableHostsOfInterest
       Events:
-        DyDbEvent:
+        DyDbEvent2:
           Type: DynamoDB
           Properties:
             StartingPosition: LATEST
