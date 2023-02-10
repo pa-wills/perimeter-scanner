@@ -9,7 +9,7 @@ Parameters:
     Type: String
   SchedulePopulateWorkQueuePeriodicityParameter:
     Description: "Please specify how often the worker should run"
-    Default: "rate(8 days)" # TODO: switch back.
+    Default: "rate(7 days)"
     Type: String
   ScheduleNmapWorkerInvocationPeriodicityParameter:
     Description: "Please specify how often the worker should run"
@@ -387,8 +387,8 @@ Resources:
       Description: 'The nmap worker function.'
       Environment:
         Variables:
-#          WORK_QUEUE:
-#            Ref: NmapWorkQueue
+          WORK_QUEUE:
+            Ref: NmapWorkQueue
           RESULTS_TABLE:
             Ref: ResultsTableHostPorts
       Events:
@@ -432,8 +432,8 @@ Resources:
         Variables:
           TABLE_TO_SCAN:
             Ref: DerivedTableHostsOfInterest
-#          QUEUE_TO_POPULATE:
-#            Ref: NmapWorkQueue
+          QUEUE_TO_POPULATE:
+            Ref: NmapWorkQueue
       Events:
         QueuePopulationScheduleEvent:
           Type: Schedule
