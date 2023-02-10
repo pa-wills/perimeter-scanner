@@ -345,7 +345,7 @@ Resources:
               !GetAtt ResultsTableHostPorts.StreamArn
       Handler: onArrivalOfHostsStreamEvent.handler
       MemorySize: 256
-      Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
+      Role: !GetAtt onPopulateHostPortsOfInterestTableExecutionRole.Arn
       Runtime: python3.9
       Timeout: 20
 
