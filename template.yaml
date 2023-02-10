@@ -194,8 +194,8 @@ Resources:
   ResultsBucket:
     Type: AWS::S3::Bucket
 
-#  NmapWorkQueue:
-#    Type: AWS::SQS:Queue
+  NmapWorkQueue:
+    Type: AWS::SQS::Queue
 
   ResultsTableHosts:
     Type: AWS::DynamoDB::Table
