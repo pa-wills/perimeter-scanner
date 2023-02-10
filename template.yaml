@@ -259,21 +259,6 @@ Resources:
           AttributeName: "datetime"
           AttributeType: "S"
         -
-          AttributeName: "host"
-          AttributeType: "S"
-        -
-          AttributeName: "ip"
-          AttributeType: "S"
-        -
-          AttributeName: "udptcp"
-          AttributeType: "S"
-        -
-          AttributeName: "port"
-          AttributeType: "S"
-        -
-          AttributeName: "service"
-          AttributeType: "S"
-        -
           AttributeName: "composite_HostIpUdpTcp"
           AttributeType: "S"
       BillingMode: PAY_PER_REQUEST
