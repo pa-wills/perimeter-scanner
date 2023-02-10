@@ -1,12 +1,16 @@
 import boto3
+import datetime
 import json
 import os
 
+thresholdSecs = 10 # (3600 * 24 * 7) # I.e. 1 week
+
 def handler(event, context):
 	dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
+	sqsClient = boto3.client("sqs")
 	
 	inputTableName = os.environ.get("TABLE_TO_SCAN")
-#	outputQueueName = os.environ.get("QUEUE_TO_POPULATE")
+	outputQueueName = os.environ.get("QUEUE_TO_POPULATE")
 
 	# TODO: Scan the derived table.
 	inputTable = dynamodb.Table(inputTableName)
@@ -15,19 +19,19 @@ def handler(event, context):
 	while 'LastEvaluatedKey' in responseScan:
 		responseScan = inputTable.scan(ExclusiveStartKey = responseScan['LastEvaluatedKey'])
 		items.extend(responseScan["Items"])
-
-	# TODO: Iterate
-		# TODO: For each item, check last scanned date.
-		# TODO: If none exists, or if not in last 7 days - enqueue.
-		# TODO: Else - continue.
+	
+	found = 0
 	for item in items:
-		print(item)
+		if "DatetimeLastNmaped" not in item: continue
+		
+		now = datetime.datetime.now()
+		datetimeLastNmaped = datetime.datetime.fromisoformat(item["DatetimeLastNmaped"])
+		deltaSecs = int((now - datetimeLastNmaped).total_seconds())
+		if (deltaSecs > thresholdSecs):
+			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
 
-
-#  hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName)
-    
-  # Step 1: get all the unique host names.
-#  responseScan = resultsTable.scan()
-#  items = responseScan["Items"]
-
-	# TODO: perhaps also enable to trigger on the worker lambda as well.
+	return {
+		'statusCode': 200,
+		'body': json.dumps('Hello from Lambda!'),
+		'stuff': found
+	}

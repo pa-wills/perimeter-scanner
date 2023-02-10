@@ -552,20 +552,10 @@ Resources:
               - 'dynamodb:Scan'
             Resource: 
               - !GetAtt DerivedTableHostsOfInterest.Arn
-              - !GetAtt ResultsTableHosts.Arn
-              - !Join
-                - ''
-                - - !GetAtt ResultsTableHosts.Arn
-                  - '/index/*'
-              - !Join
-                - ''
-                - - !GetAtt ResultsTableHosts.Arn
-                  - '/stream/*'
           - Effect: Allow
             Action: 
-              - 'dynamodb:PutItem'
-              - 'dynamodb:UpdateItem'
-            Resource: !GetAtt DerivedTableHostsOfInterest.Arn
+              - 'sqs:SendMessage'
+            Resource: !GetAtt NmapWorkQueue.Arn
       Roles:
         - !Ref onPopulateNmapWorkQueueExecutionRole
 
