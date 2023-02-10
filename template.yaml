@@ -312,7 +312,7 @@ Resources:
       Description: 'The function that updates the Hosts of Interest table.'
       Environment:
         Variables:
-          TABLE_NAME_HOSTPORTS_OF_INTEREST:
+          TABLE_NAME_HOSTS_OF_INTEREST:
             Ref: DerivedTableHostsOfInterest
       Events:
         DyDbEvent:
@@ -334,7 +334,7 @@ Resources:
       Description: 'The function that updates the HostPorts of Interest table.'
       Environment:
         Variables:
-          TABLE_NAME_HOSTS_OF_INTEREST:
+          TABLE_NAME_HOSTPORTS_OF_INTEREST:
             Ref: DerivedTableHostsOfInterest
       Events:
         DyDbEvent2:
@@ -343,7 +343,7 @@ Resources:
             StartingPosition: LATEST
             Stream:
               !GetAtt ResultsTableHostPorts.StreamArn
-      Handler: onArrivalOfHostsStreamEvent.handler
+      Handler: onArrivalOfHostPortsStreamEvent.handler
       MemorySize: 256
       Role: !GetAtt onPopulateHostPortsOfInterestTableExecutionRole.Arn
       Runtime: python3.9
