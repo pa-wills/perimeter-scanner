@@ -9,7 +9,7 @@ Parameters:
     Type: String
   SchedulePopulateWorkQueuePeriodicityParameter:
     Description: "Please specify how often the worker should run"
-    Default: "rate(1 week)"
+    Default: "rate(7 days)"
     Type: String
   ScheduleNmapWorkerInvocationPeriodicityParameter:
     Description: "Please specify how often the worker should run"
