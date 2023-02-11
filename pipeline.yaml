@@ -225,6 +225,7 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
+  # TODO: need a lifecycle policy to keep the last 5 images, say.
   PipelineOutputRegistry:
     Type: AWS::ECR::Repository
     Properties:
