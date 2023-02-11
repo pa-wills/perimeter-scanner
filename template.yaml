@@ -380,9 +380,9 @@ Resources:
 
   onNmap:
     Type: AWS::Serverless::Function
-    Metadata:
-      DockerContext: "./onNmap"
-      Dockerfile: "Dockerfile"
+#    Metadata:
+#      DockerContext: "./onNmap"
+#      Dockerfile: "Dockerfile"
     Properties:
       Description: 'The nmap worker function.'
       Environment:

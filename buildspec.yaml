@@ -7,6 +7,13 @@
 
 version: 0.2 # Turns out this matters - https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html#build-spec-ref-versions
 
+# I think there are essentially two challenges here, and I have combined them together, and i shouldn't have.
+# The first challenge is building the container for the lambda, pushing it to the ECR. The second - the familiar challenge - building, 
+# packaging and deploying the template. 
+
+# TODO: make CodeBuild check the provided repo for a latest image. If none exists - build it. Else - continue.
+# TODO: sam build, package as before, but inhibit the building of the container, which SAM wants to do by default.
+
 phases:
   install:
     runtime-versions:
