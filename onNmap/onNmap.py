@@ -13,8 +13,9 @@ def handler(event, context):
     sqs = boto3.client('sqs')
 
     # TODO: If queue depth == 0, exit()
+    print(sqs.get_queue_attributes(QueueUrl = workQueueName, AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"])
     if (sqs.get_queue_attributes(
-        QueueUrl = workQueueName, 
+        QueueUrl = workQueueName,
         AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == 0
     ):
         # TODO: Maybe it should also disable the trigger for this function.
