@@ -13,7 +13,7 @@ def handler(event, context):
     sqs = boto3.client('sqs')
 
     # TODO: If queue depth == 0, exit()
-    if (client.get_queue_attributes(
+    if (sqs.get_queue_attributes(
         QueueUrl = workQueueName, 
         AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == 0
     ):
