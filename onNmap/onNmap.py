@@ -16,7 +16,7 @@ def handler(event, context):
     print(sqs.get_queue_attributes(QueueUrl = workQueueName, AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"])
     if (sqs.get_queue_attributes(
         QueueUrl = workQueueName,
-        AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == 0
+        AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == "0"
     ):
         # TODO: Maybe it should also disable the trigger for this function.
         return {
