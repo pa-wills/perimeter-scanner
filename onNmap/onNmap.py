@@ -27,12 +27,10 @@ def handler(event, context):
     response = sqs.receive_message(QueueUrl = workQueueName, MaxNumberOfMessages = 1)
     message = response['Messages'][0]
     receiptHandle = message['ReceiptHandle']
-
  
-#    nm = nmap.PortScanner()
-#    stuff = nm.scan('peterwills.com', '22-443')
+    nm = nmap.PortScanner()
+    nmapResults = nm.scan(message["Body"], '22-443')
 
-    # TODO: Nmap said host.
     # TODO: Write required messages to table.
 
     # TODO: Delete message from queue.
@@ -41,5 +39,6 @@ def handler(event, context):
     return {
         'statusCode': 200,
         'message': message,
+        'nmapOutputs': nmapResults,
         'body': json.dumps('Hello from nmap, mofos!')
     }
