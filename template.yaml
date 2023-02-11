@@ -516,7 +516,7 @@ Resources:
               - 'sqs:DeleteMessage'
               - 'sqs:ReceiveMessage'
               - 'sqs:GetQueueAttributes'
-            Resource: !Ref NmapWorkQueue
+            Resource: !GetAtt NmapWorkQueue.Arn
       Roles:
         - !Ref onNmapExecutionRole
 
