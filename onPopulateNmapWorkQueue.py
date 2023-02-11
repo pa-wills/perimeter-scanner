@@ -3,7 +3,7 @@ import datetime
 import json
 import os
 
-thresholdSecs = 10 # (3600 * 24 * 7) # I.e. 1 week
+thresholdSecs = (3600 * 24 * 7) # I.e. 1 week
 
 def handler(event, context):
 	dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
@@ -12,7 +12,7 @@ def handler(event, context):
 	inputTableName = os.environ.get("TABLE_TO_SCAN")
 	outputQueueName = os.environ.get("QUEUE_TO_POPULATE")
 
-	# TODO: Scan the derived table.
+	# Scan the derived table.
 	inputTable = dynamodb.Table(inputTableName)
 	responseScan = inputTable.scan()
 	items = responseScan["Items"]
@@ -20,9 +20,10 @@ def handler(event, context):
 		responseScan = inputTable.scan(ExclusiveStartKey = responseScan['LastEvaluatedKey'])
 		items.extend(responseScan["Items"])
 	
-	found = 0
+	# Iterate. If never nmaped, or not for thresholdSecs seconds: enqueue.
 	for item in items:
-		if "DatetimeLastNmaped" not in item: continue
+		if "DatetimeLastNmaped" not in item:
+			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
 		
 		now = datetime.datetime.now()
 		datetimeLastNmaped = datetime.datetime.fromisoformat(item["DatetimeLastNmaped"])
@@ -31,7 +32,5 @@ def handler(event, context):
 			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
 
 	return {
-		'statusCode': 200,
-		'body': json.dumps('Hello from Lambda!'),
-		'stuff': found
+		'statusCode': 200
 	}
