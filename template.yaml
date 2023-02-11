@@ -511,6 +511,12 @@ Resources:
             Action:
               - 'ecr:*' # TODO: tighten, for least priv.
             Resource: !Ref EcrRepoArn
+          - Effect: Allow
+            Action:
+              - 'sqs:DeleteMessage'
+              - 'sqs:ReceiveMessage'
+              - 'sqs:GetQueueAttributes'
+            Resource: !Ref NmapWorkQueue
       Roles:
         - !Ref onNmapExecutionRole
 

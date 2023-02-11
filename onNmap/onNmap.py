@@ -24,7 +24,7 @@ def handler(event, context):
         }
 
     # TODO: Pop from queue, obtain hostname.
-    response = client.receive_message(QueueUrl = workQueueName, MaxNumberOfMessages = 1)
+    response = sqs.receive_message(QueueUrl = workQueueName, MaxNumberOfMessages = 1)
     message = response['Messages'][0]
     receiptHandle = message['ReceiptHandle']
 
