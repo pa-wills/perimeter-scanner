@@ -1,6 +1,7 @@
 import boto3
 import json
 import nmap
+import os
 
 def handler(event, context):
 
