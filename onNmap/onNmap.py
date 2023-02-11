@@ -8,7 +8,7 @@ def handler(event, context):
     # TODO: establish contexts to the worked queue and output table.
     outputTableName = os.environ.get("RESULTS_TABLE")
     dynamodb = boto3.resource('dynamodb', region_name="ap-southeast-2")
-    table = dynamodb.Table(tableName)
+    table = dynamodb.Table(outputTableName)
     workQueueName = os.environ.get("WORK_QUEUE")
     sqs = boto3.client('sqs')
 
