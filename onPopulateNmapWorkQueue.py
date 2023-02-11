@@ -24,6 +24,7 @@ def handler(event, context):
 	for item in items:
 		if "DatetimeLastNmaped" not in item:
 			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
+			continue
 		
 		now = datetime.datetime.now()
 		datetimeLastNmaped = datetime.datetime.fromisoformat(item["DatetimeLastNmaped"])

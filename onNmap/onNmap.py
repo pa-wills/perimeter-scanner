@@ -12,8 +12,7 @@ def handler(event, context):
     workQueueName = os.environ.get("WORK_QUEUE")
     sqs = boto3.client('sqs')
 
-    # TODO: If queue depth == 0, exit()
-    print(sqs.get_queue_attributes(QueueUrl = workQueueName, AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"])
+    # If queue depth == 0, continue.
     if (sqs.get_queue_attributes(
         QueueUrl = workQueueName,
         AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == "0"
@@ -37,10 +36,10 @@ def handler(event, context):
     # TODO: Write required messages to table.
 
     # TODO: Delete message from queue.
-    response = client.delete_message(QueueUrl = workQueueName, ReceiptHandle = receiptHandle)
+    response = sqs.delete_message(QueueUrl = workQueueName, ReceiptHandle = receiptHandle)
 
     return {
         'statusCode': 200,
-        'stuff': stuff,
+        'message': message,
         'body': json.dumps('Hello from nmap, mofos!')
     }
