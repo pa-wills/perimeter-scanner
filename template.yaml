@@ -519,7 +519,7 @@ Resources:
               - 'sqs:GetQueueAttributes'
           - Effect: Allow
             Action:
-              - 'dynamodb:*'
+              - 'dynamodb:UpdateItem'
             Resource: 
               - !GetAtt DerivedTableHostsOfInterest.Arn
               - !GetAtt ResultsTableHostPorts.Arn
