@@ -196,6 +196,7 @@ Resources:
 
   NmapWorkQueue:
     Type: AWS::SQS::Queue
+  # TODO: message retention should probably match the perioidicity of the quueue-populating lambda.
 
   ResultsTableHosts:
     Type: AWS::DynamoDB::Table
@@ -516,7 +517,12 @@ Resources:
               - 'sqs:DeleteMessage'
               - 'sqs:ReceiveMessage'
               - 'sqs:GetQueueAttributes'
-            Resource: !GetAtt NmapWorkQueue.Arn
+          - Effect: Allow
+            Action:
+              - 'dynamodb:*'
+            Resource: 
+              - !GetAtt DerivedTableHostsOfInterest.Arn
+              - !GetAtt ResultsTableHostPorts.Arn
       Roles:
         - !Ref onNmapExecutionRole
 

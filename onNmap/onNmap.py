@@ -3,12 +3,16 @@ import json
 import nmap
 import os
 
+# This is the nmap worker function. It 1. pops a message from the queue it's paired with, 2. attempts to nmap the host referred to within,
+# 3. parses the results, 4. Writes the results out to the required tables
+
 def handler(event, context):
 
     # TODO: establish contexts to the worked queue and output table.
     outputTableName = os.environ.get("RESULTS_TABLE")
     dynamodb = boto3.resource('dynamodb', region_name="ap-southeast-2")
-    table = dynamodb.Table(outputTableName)
+    hostsOfInterestTable = dynamodb.Table(outputTableName)
+
     workQueueName = os.environ.get("WORK_QUEUE")
     sqs = boto3.client('sqs')
 
@@ -31,9 +35,20 @@ def handler(event, context):
     nm = nmap.PortScanner()
     nmapResults = nm.scan(message["Body"], '22-443')
 
-    # TODO: Write required messages to table.
+    # TODO: Write required results out to the HostPorts table.
 
-    # TODO: Delete message from queue.
+    # TODO: Write the current datetime back to the HostsOfInterest table.
+    datetimeString = str(datetime.datetime.now().isoformat())
+    hostsOfInterestTable.update_item(
+        Key = {
+          "host": str(message["Body"])
+        },
+        UpdateExpression = "set DatetimeLastNmaped = :r",
+        ExpressionAttributeValues = {
+          ":r": datetimeString
+        }
+      )
+
     response = sqs.delete_message(QueueUrl = workQueueName, ReceiptHandle = receiptHandle)
 
     return {
