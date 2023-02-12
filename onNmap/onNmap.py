@@ -37,7 +37,8 @@ def handler(event, context):
     nm = nmap.PortScanner()
     nmapResults = nm.scan(message["Body"], '22-443')
     print("nmap - completed")
-    print(nmapResults)
+    print("message results: " + str(message))
+    print("nmap results: " + str(nmapResults))
 
     # TODO: Write required results out to the HostPorts table.
 
