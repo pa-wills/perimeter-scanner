@@ -400,7 +400,7 @@ Resources:
           - ':latest'
       PackageType: Image
       Role: !GetAtt onNmapExecutionRole.Arn
-      Timeout: 20
+      Timeout: 120
 
   # TODO: I'm going to need a custom resource to update the ImageURI to the latest item.
   # E.g. aws lambda update-function-code --function-name  PerimeterScanner-DevTest-onNmap-XcpjqIJfhgM8 --image-uri 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest
