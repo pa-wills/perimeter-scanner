@@ -42,7 +42,7 @@ def handler(event, context):
     print("nmap results json: " + str(nmapResultsJson))
 
     # TODO: Write required results out to the HostPorts table.
-    nmapResults = json.loads(nmapResultsJson)
+    nmapResults = json.loads(str(nmapResultsJson))
     print("nmap results: " + str(nmapResults))
 
 
