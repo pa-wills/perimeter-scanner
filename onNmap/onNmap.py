@@ -1,4 +1,5 @@
 import boto3
+import datetime
 import json
 import nmap
 import os
@@ -32,8 +33,11 @@ def handler(event, context):
     message = response['Messages'][0]
     receiptHandle = message['ReceiptHandle']
  
+    print("nmap - starting")
     nm = nmap.PortScanner()
     nmapResults = nm.scan(message["Body"], '22-443')
+    print("nmap - completed")
+    print(nmapResults)
 
     # TODO: Write required results out to the HostPorts table.
 
