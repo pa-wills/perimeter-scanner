@@ -517,11 +517,11 @@ Resources:
               - 'sqs:DeleteMessage'
               - 'sqs:ReceiveMessage'
               - 'sqs:GetQueueAttributes'
-          - Effect: Allow
-            Action:
-              - 'dynamodb:UpdateItem'
-            Resource: 
-              - !GetAtt DerivedTableHostsOfInterest.Arn
+#          - Effect: Allow
+#            Action:
+#              - 'dynamodb:UpdateItem'
+#            Resource: 
+#              - !GetAtt DerivedTableHostsOfInterest.Arn
       Roles:
         - !Ref onNmapExecutionRole
 
