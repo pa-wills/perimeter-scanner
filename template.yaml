@@ -522,7 +522,6 @@ Resources:
               - 'dynamodb:UpdateItem'
             Resource: 
               - !GetAtt DerivedTableHostsOfInterest.Arn
-              - !GetAtt ResultsTableHostPorts.Arn
       Roles:
         - !Ref onNmapExecutionRole
 
