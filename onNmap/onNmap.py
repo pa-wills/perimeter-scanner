@@ -9,12 +9,13 @@ import os
 
 def handler(event, context):
 
-    # TODO: establish contexts to the worked queue and output table.
-    outputTableName = os.environ.get("RESULTS_TABLE")
-    dynamodb = boto3.resource('dynamodb', region_name="ap-southeast-2")
-    hostsOfInterestTable = dynamodb.Table(outputTableName)
-
+    outputDerivedHostsTableName = os.environ.get("HOSTS_OF_INTEREST_TABLE")
+    outputHostPortsTableName = os.environ.get("HOST_PORTS_TABLE")
     workQueueName = os.environ.get("WORK_QUEUE")
+
+    dynamodb = boto3.resource('dynamodb', region_name="ap-southeast-2")
+    hostsOfInterestTable = dynamodb.Table(outputDerivedHostsTableName)
+    hostPortsTable = dynamodb.Table(outputDerivedHostsTableName)
     sqs = boto3.client('sqs')
 
     # If queue depth == 0, continue.

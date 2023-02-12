@@ -387,8 +387,10 @@ Resources:
         Variables:
           WORK_QUEUE:
             Ref: NmapWorkQueue
-          RESULTS_TABLE:
+          HOST_PORTS_TABLE:
             Ref: ResultsTableHostPorts
+          HOSTS_OF_INTEREST_TABLE:
+            Ref: DerivedTableHostsOfInterest
       Events:
         InvokeNmapScheduleEvent:
           Type: Schedule
