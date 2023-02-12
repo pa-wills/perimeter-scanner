@@ -36,10 +36,10 @@ def handler(event, context):
  
     print("nmap - starting")
     nm = nmap.PortScanner()
-    nmapResultsCsv = nm.scan(message["Body"], '22-443').csv()
+    nmapResults = nm.scan(message["Body"], '22-443')
     print("nmap - completed")
     print("message results: " + str(message))
-    print("nmap results csv: " + str(nmapResultsCsv))
+    print("nmap results csv: " + str(nmapResults.csv()))
 
     # TODO: Write required results out to the HostPorts table.
 #    nmapResults = json.loads(str(nmapResultsJson))
