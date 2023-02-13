@@ -50,6 +50,7 @@ def handler(event, context):
         datetimeString = str(datetime.datetime.now().isoformat())
         response = hostPortsTable.put_item(
             Item = {
+                'composite_HostIpUdpTcp': (words[1] + words[0] + words[3] + words[4]),
                 'datetime': datetimeString,
                 'host': words[0],
                 'hostname': words[1],
