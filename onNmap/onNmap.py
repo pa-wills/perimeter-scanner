@@ -45,8 +45,10 @@ def handler(event, context):
 
     # TODO: Write required results out to the HostPorts table.
     # Specifically - parse from csv.
-    for csvItem in nmapResultsCsv:
-        words = csvItem.split(", ")
+
+    for csvItem in nmapResultsCsv.splitlines():
+        print(csvItem)
+        words = csvItem.split(";")
         if (words[0] == "host"): continue
         print("word: \"" + str(words) + "\"")
 
