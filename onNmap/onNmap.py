@@ -15,7 +15,7 @@ def handler(event, context):
 
     dynamodb = boto3.resource('dynamodb', region_name="ap-southeast-2")
     hostsOfInterestTable = dynamodb.Table(outputDerivedHostsTableName)
-    hostPortsTable = dynamodb.Table(outputDerivedHostsTableName)
+    hostPortsTable = dynamodb.Table(outputHostPortsTableName)
     sqs = boto3.client('sqs')
 
     # If queue depth == 0, continue.
@@ -48,7 +48,7 @@ def handler(event, context):
         words = csvItem.split(";")
         if (words[0] == "host"): continue
         datetimeString = str(datetime.datetime.now().isoformat())
-        response = table.put_item(
+        response = hostPortsTable.put_item(
             Item = {
                 'datetime': datetimeString,
                 'host': words[0],
