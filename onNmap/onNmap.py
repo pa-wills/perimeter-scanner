@@ -35,9 +35,9 @@ def handler(event, context):
     receiptHandle = message['ReceiptHandle']
  
 #    print("nmap - starting")
-#    nm = nmap.PortScanner()
-#    nmapResults = nm.scan(message["Body"], '22-443')
-#    nmapResultsCsv = nm.csv()
+    nm = nmap.PortScanner()
+    nmapResults = nm.scan(message["Body"], '22-443')
+    nmapResultsCsv = nm.csv()
 #    print("nmap - completed")
 #    print("message results: " + str(message))
 #    print("nmap results: " + str(nmapResults))
