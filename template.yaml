@@ -522,6 +522,7 @@ Resources:
             Resource: !GetAtt NmapWorkQueue.Arn
           - Effect: Allow
             Action:
+              - 'dynamodb:PutItem'
               - 'dynamodb:UpdateItem'
             Resource: 
               - !GetAtt DerivedTableHostsOfInterest.Arn
