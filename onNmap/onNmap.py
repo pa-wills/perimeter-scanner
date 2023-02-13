@@ -45,7 +45,10 @@ def handler(event, context):
 
     # TODO: Write required results out to the HostPorts table.
     # Specifically - parse from csv.
-
+    for csvItem in nmapResultsCsv:
+        words = csvItem.split(";")
+        if (words[0] == "host"): continue
+        print(words)
 
 
     # TODO: Write the current datetime back to the HostsOfInterest table.
