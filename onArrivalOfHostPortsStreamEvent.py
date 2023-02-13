@@ -17,7 +17,7 @@ def handler(event, context):
     if record["eventName"] != "INSERT": 
       continue
     responseQuery = hostPortsOfInterestTable.query(
-      KeyConditionExpression = Key("composite_HostIpUdpTcp").eq(str(record["dynamodb"]["Keys"]["host"]["S"]))
+      KeyConditionExpression = Key("composite_HostIpUdpTcp").eq(str(record["dynamodb"]["Keys"]["composite_HostIpUdpTcp"]["S"]))
     )
     datetimeString = str(datetime.datetime.now().isoformat())
     if (responseQuery["Items"] == []):
