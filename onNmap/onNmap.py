@@ -34,24 +34,38 @@ def handler(event, context):
     message = response['Messages'][0]
     receiptHandle = message['ReceiptHandle']
  
-    print("nmap - starting")
-    nm = nmap.PortScanner()
-    nmapResults = nm.scan(message["Body"], '22-443')
-    nmapResultsCsv = nm.csv()
-    print("nmap - completed")
-    print("message results: " + str(message))
-    print("nmap results: " + str(nmapResults))
-    print("nmap results csv: " + str(nmapResultsCsv))
+#    print("nmap - starting")
+#    nm = nmap.PortScanner()
+#    nmapResults = nm.scan(message["Body"], '22-443')
+#    nmapResultsCsv = nm.csv()
+#    print("nmap - completed")
+#    print("message results: " + str(message))
+#    print("nmap results: " + str(nmapResults))
+#    print("nmap results csv: " + str(nmapResultsCsv))
 
     # TODO: Write required results out to the HostPorts table.
-    # Specifically - parse from csv.
-
     for csvItem in nmapResultsCsv.splitlines():
-        print(csvItem)
         words = csvItem.split(";")
         if (words[0] == "host"): continue
-        print("word: \"" + str(words) + "\"")
-
+        datetimeString = str(datetime.datetime.now().isoformat())
+        response = table.put_item(
+            Item = {
+                'datetime': datetimeString,
+                'host': words[0],
+                'hostname': words[1],
+                'hostname_type': words[2],
+                'protocol': words[3],
+                'port': words[4],
+                'name': words[5],
+                'state': words[6],
+                'product': words[7],
+                'extrainfo': words[8],
+                'reason': words[9],
+                'version': words[10],
+                'conf': words[11],
+                'cpe': words[12]
+            }
+        )
 
     # TODO: Write the current datetime back to the HostsOfInterest table.
     datetimeString = str(datetime.datetime.now().isoformat())
@@ -70,6 +84,5 @@ def handler(event, context):
     return {
         'statusCode': 200,
         'message': message,
-        'nmapOutputs': nmapResults,
-        'body': json.dumps('Hello from nmap, mofos!')
+        'nmapOutputs': nmapResults
     }
