@@ -190,6 +190,8 @@ Resources:
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         EnvironmentVariables:
+          - Name: ECR_REPO_NAME
+            Value: !Ref PipelineOutputRegistry
           - Name: ECR_REPO_URI
             Value: !GetAtt PipelineOutputRegistry.RepositoryUri
           - Name: S3_BUCKET
@@ -467,33 +469,3 @@ Resources:
                   - 's3:*'
                   - 'cloudformation:*'
                 Resource: '*'
-
-  # The creating user needs to have IAM::PassRole in order to make this work.
-  # TODO: Ummm, do I even need this? Nothing in the stack refers to it.
-  # TODO: it doesn't seem to have been invoked, since creation in Nov 2022.
-  # TODO: Seems to have gone through once just fine without the role, which has never been called.
-  # TODO: Candidate for deletion as of 2023-02-07
-#  CloudFormationTrustRole:
-#    Description: Creating service role in IAM for AWS CloudFormation
-#    Type: AWS::IAM::Role
-#    Properties:
-#      AssumeRolePolicyDocument:
-#        Statement:
-#        - Effect: Allow
-#          Principal:
-#            Service: [cloudformation.amazonaws.com]
-#          Action: sts:AssumeRole
-#      Path: /
-#      Policies:
-#        - PolicyName: CloudFormationRolePolicy # TODO: Use intrinsic function
-#          PolicyDocument:
-#            Version: 2012-10-17
-#            Statement:
-#              - Effect: Allow
-#                Action:
-#                  - 'cloudformation:*'
-#                  - 'ecr:*' # TODO: Seems the role creating the function needs ECR. Least-priv later.
-#                  - 'iam:*'
-#                  - 'lambda:*'
-#                  - 's3:*'
-#                Resource: '*'

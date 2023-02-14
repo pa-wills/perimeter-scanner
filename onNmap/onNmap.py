@@ -29,7 +29,7 @@ def handler(event, context):
             'body': json.dumps('Work queue was zero-depth. Exiting')
         }
 
-    # TODO: Pop from queue, obtain hostname.
+    # Pop from queue, obtain hostname.
     response = sqs.receive_message(QueueUrl = workQueueName, MaxNumberOfMessages = 1)
     message = response['Messages'][0]
     receiptHandle = message['ReceiptHandle']
@@ -43,7 +43,7 @@ def handler(event, context):
 #    print("nmap results: " + str(nmapResults))
 #    print("nmap results csv: " + str(nmapResultsCsv))
 
-    # TODO: Write required results out to the HostPorts table.
+    # Write required results out to the HostPorts table.
     for csvItem in nmapResultsCsv.splitlines():
         words = csvItem.split(";")
         if (words[0] == "host"): continue
@@ -68,7 +68,7 @@ def handler(event, context):
             }
         )
 
-    # TODO: Write the current datetime back to the HostsOfInterest table.
+    # Write the current datetime back to the HostsOfInterest table.
     datetimeString = str(datetime.datetime.now().isoformat())
     hostsOfInterestTable.update_item(
         Key = {
