@@ -521,7 +521,6 @@ Resources:
 
   onNmapExecutionRolePolicy:
     Type: 'AWS::IAM::Policy'
-    DependsOn: onNmapEventRule
     Properties:
       PolicyName: policyForOnPopulateHostsOfInterestTableExecutionRole
       PolicyDocument:
