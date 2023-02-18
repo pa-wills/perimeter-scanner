@@ -205,6 +205,8 @@ Resources:
 
   NmapWorkQueueDLQ:
     Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600 # 14 days
 
   ResultsTableHosts:
     Type: AWS::DynamoDB::Table
