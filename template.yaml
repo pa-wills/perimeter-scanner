@@ -196,7 +196,20 @@ Resources:
 
   NmapWorkQueue:
     Type: AWS::SQS::Queue
-  # TODO: message retention should probably match the perioidicity of the quueue-populating lambda.
+    Properties:
+      # TODO: message retention should probably match the perioidicity of the quueue-populating lambda.
+      MessageRetentionPeriod: 604800 # 7 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NmapWorkQueueDLQ.Arn
+        maxReceiveCount: 5
+
+  NmapWorkQueueDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      RedriveAllowPolicy:
+        redrivePermission: byQueue
+        sourceQueueArns: !GetAtt NmapWorkQueue.Arn
+
 
   ResultsTableHosts:
     Type: AWS::DynamoDB::Table
