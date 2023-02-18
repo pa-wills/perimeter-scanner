@@ -403,11 +403,6 @@ Resources:
             Ref: DerivedTableHostsOfInterest
           TRIGGERING_RULE:
             Ref: InvokeNmapScheduleEvent
-      Events:
-        InvokeNmapScheduleEvent:
-          Type: Schedule
-          Properties:
-            Schedule: !Ref ScheduleNmapWorkerInvocationPeriodicityParameter
       ImageUri: !Join
         - ''
         - - !Ref EcrRepoUri
@@ -415,6 +410,14 @@ Resources:
       PackageType: Image
       Role: !GetAtt onNmapExecutionRole.Arn
       Timeout: 120
+
+    onNmapEventRule:
+      Type: AWS::Events::Rule
+      Properties:
+        SchduleExpression: !Ref ScheduleNmapWorkerInvocationPeriodicityParameter
+        State: ENABLED
+        Targets:
+          - Arn: !GetAtt onNmap.Arn
 
 
   # TODO: I'm going to need a custom resource to update the ImageURI to the latest item.
@@ -544,7 +547,7 @@ Resources:
             Action:
               - 'eventbridge:DisableRule'
             Resource: 
-              - '*'
+              - !GetAtt onNmapEventRule.Arn
       Roles:
         - !Ref onNmapExecutionRole
 
