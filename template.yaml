@@ -205,8 +205,6 @@ Resources:
 
   NmapWorkQueueDLQ:
     Type: AWS::SQS::Queue
-    Properties:
-
 
   ResultsTableHosts:
     Type: AWS::DynamoDB::Table
