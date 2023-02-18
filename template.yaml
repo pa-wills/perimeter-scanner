@@ -414,7 +414,7 @@ Resources:
   onNmapEventRule:
     Type: AWS::Events::Rule
     Properties:
-      SchduleExpression: !Ref ScheduleNmapWorkerInvocationPeriodicityParameter
+      ScheduleExpression: !Ref ScheduleNmapWorkerInvocationPeriodicityParameter
       State: ENABLED
       Targets:
         - Arn: !GetAtt onNmap.Arn
