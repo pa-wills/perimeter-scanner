@@ -543,11 +543,11 @@ Resources:
             Resource: 
               - !GetAtt DerivedTableHostsOfInterest.Arn
               - !GetAtt ResultsTableHostPorts.Arn
-          - Effect: Allow
-            Action:
-              - 'eventbridge:DisableRule'
-            Resource: 
-              - !GetAtt onNmapEventRule.Arn
+#          - Effect: Allow
+#            Action:
+#              - 'eventbridge:DisableRule'
+#            Resource: 
+#              - !GetAtt onNmapEventRule.Arn
       Roles:
         - !Ref onNmapExecutionRole
 
