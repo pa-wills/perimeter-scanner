@@ -401,8 +401,6 @@ Resources:
             Ref: ResultsTableHostPorts
           HOSTS_OF_INTEREST_TABLE:
             Ref: DerivedTableHostsOfInterest
-          TRIGGERING_RULE:
-            Ref: onNmapEventRule
       ImageUri: !Join
         - ''
         - - !Ref EcrRepoUri
@@ -544,11 +542,11 @@ Resources:
             Resource: 
               - !GetAtt DerivedTableHostsOfInterest.Arn
               - !GetAtt ResultsTableHostPorts.Arn
-#          - Effect: Allow
-#            Action:
-#              - 'eventbridge:DisableRule'
-#            Resource: 
-#              - !GetAtt onNmapEventRule.Arn
+          - Effect: Allow
+            Action:
+              - 'eventbridge:DisableRule'
+            Resource: 
+              - !GetAtt onNmapEventRule.Arn
       Roles:
         - !Ref onNmapExecutionRole
 
