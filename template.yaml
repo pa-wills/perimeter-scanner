@@ -418,6 +418,7 @@ Resources:
       State: ENABLED
       Targets:
         - Arn: !GetAtt onNmap.Arn
+          Id: onNmapFunction
 
 
   # TODO: I'm going to need a custom resource to update the ImageURI to the latest item.
