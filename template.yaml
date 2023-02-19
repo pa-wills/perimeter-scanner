@@ -411,13 +411,13 @@ Resources:
       Role: !GetAtt onNmapExecutionRole.Arn
       Timeout: 120
 
-  onNmapEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      ScheduleExpression: !Ref ScheduleNmapWorkerInvocationPeriodicityParameter
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt onNmap.Arn
+#  onNmapEventRule:
+#    Type: AWS::Events::Rule
+#    Properties:
+#      ScheduleExpression: !Ref ScheduleNmapWorkerInvocationPeriodicityParameter
+#      State: ENABLED
+#      Targets:
+#        - Arn: !GetAtt onNmap.Arn
 
 
   # TODO: I'm going to need a custom resource to update the ImageURI to the latest item.
