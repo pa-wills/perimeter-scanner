@@ -401,8 +401,8 @@ Resources:
             Ref: ResultsTableHostPorts
           HOSTS_OF_INTEREST_TABLE:
             Ref: DerivedTableHostsOfInterest
-#          TRIGGERING_RULE:
-#            Ref: onNmapEventRule
+          TRIGGERING_RULE:
+            Ref: onNmapEventRule
       ImageUri: !Join
         - ''
         - - !Ref EcrRepoUri
