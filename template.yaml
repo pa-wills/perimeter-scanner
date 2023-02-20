@@ -418,6 +418,17 @@ Resources:
         - Arn: !GetAtt onNmap.Arn
           Id: onNmapFunction
 
+  onNmapEventRuleLambdaPermission: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref onNmap
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "onNmapEventRule"
+          - "Arn"
+
 
   # TODO: I'm going to need a custom resource to update the ImageURI to the latest item.
   # E.g. aws lambda update-function-code --function-name  PerimeterScanner-DevTest-onNmap-XcpjqIJfhgM8 --image-uri 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest
