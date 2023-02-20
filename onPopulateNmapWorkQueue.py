@@ -34,8 +34,8 @@ def handler(event, context):
 			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
 
 	# TODO: Implement enablement of the nmap triggering rule.
-    events = boto3.client("events")
-    response = events.enable_rule(Name = workerLambdaRuleName)
+	events = boto3.client("events")
+	response = events.enable_rule(Name = workerLambdaRuleName)
 
 	return {
 		'statusCode': 200
