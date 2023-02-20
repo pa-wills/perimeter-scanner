@@ -27,8 +27,12 @@ def handler(event, context):
         AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == "0"
     ):
         # TODO: Maybe it should also disable the trigger for this function.
+        print("rule that i need to disable: " + str(event["resources"][0]))
+
         return {
             'statusCode': 200,
+            'event': str(event),
+            'context': str(context),
             'body': json.dumps('Work queue was zero-depth. Exiting')
         }
 

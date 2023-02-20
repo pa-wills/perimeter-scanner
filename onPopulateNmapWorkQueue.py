@@ -32,6 +32,9 @@ def handler(event, context):
 		if (deltaSecs > thresholdSecs):
 			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
 
+	# TODO: Implement enablement of the nmap triggering rule.
+
+
 	return {
 		'statusCode': 200
 	}
