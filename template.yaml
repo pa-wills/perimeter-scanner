@@ -442,8 +442,6 @@ Resources:
             Ref: ResultsTableHosts
           TABLE_NAME_HOSTS_OF_INTEREST:
             Ref: DerivedTableHostsOfInterest
-          RULE_TRIGGER_WORKER_LAMBDA:
-            Ref: onNmapEventRule
       Handler: onPopulateHostsOfInterestTable.handler
       MemorySize: 1024
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
@@ -461,6 +459,8 @@ Resources:
             Ref: DerivedTableHostsOfInterest
           QUEUE_TO_POPULATE:
             Ref: NmapWorkQueue
+          RULE_TRIGGER_WORKER_LAMBDA:
+            Ref: onNmapEventRule
       Events:
         QueuePopulationScheduleEvent:
           Type: Schedule
