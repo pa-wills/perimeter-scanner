@@ -11,6 +11,7 @@ def handler(event, context):
 	
 	inputTableName = os.environ.get("TABLE_TO_SCAN")
 	outputQueueName = os.environ.get("QUEUE_TO_POPULATE")
+	workerLambdaRuleName = os.environ.get("RULE_TRIGGER_WORKER_LAMBDA")
 
 	# Scan the derived table.
 	inputTable = dynamodb.Table(inputTableName)
@@ -33,7 +34,8 @@ def handler(event, context):
 			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
 
 	# TODO: Implement enablement of the nmap triggering rule.
-
+    events = boto3.client("events")
+    response = events.enable_rule(Name = workerLambdaRuleName)
 
 	return {
 		'statusCode': 200

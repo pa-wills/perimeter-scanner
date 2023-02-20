@@ -10,9 +10,6 @@ import re
 
 def handler(event, context):
 
-    print("event: " + str(event))
-    print("context: " + str(context))
-
     outputDerivedHostsTableName = os.environ.get("HOSTS_OF_INTEREST_TABLE")
     outputHostPortsTableName = os.environ.get("HOST_PORTS_TABLE")
     workQueueName = os.environ.get("WORK_QUEUE")
@@ -27,17 +24,15 @@ def handler(event, context):
         QueueUrl = workQueueName,
         AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == "0"
     ):
-        # TODO: Maybe it should also disable the trigger for this function.
-        print("arn of rule that i need to disable: " + str(event["resources"][0]))
+        
+        # Disable the trigger for this function. No point running it until the queue refills.
+        # TODO: I really want to refer to an EnvVar. Parsing the message in this way is kludgey.
         matches = re.search('\/(.*)$', str(event["resources"][0]))
         events = boto3.client("events")
         response = events.disable_rule(Name = str(matches.group(1)))
  
         return {
             'statusCode': 200,
-            'event': str(event),
-            'context': str(context),
-            'response': str(response),
             'body': json.dumps('Work queue was zero-depth. Exiting')
         }
 
@@ -46,14 +41,9 @@ def handler(event, context):
     message = response['Messages'][0]
     receiptHandle = message['ReceiptHandle']
  
-#    print("nmap - starting")
     nm = nmap.PortScanner()
     nmapResults = nm.scan(message["Body"], '22-443')
     nmapResultsCsv = nm.csv()
-#    print("nmap - completed")
-#    print("message results: " + str(message))
-#    print("nmap results: " + str(nmapResults))
-#    print("nmap results csv: " + str(nmapResultsCsv))
 
     # Write required results out to the HostPorts table.
     for csvItem in nmapResultsCsv.splitlines():

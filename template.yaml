@@ -442,6 +442,8 @@ Resources:
             Ref: ResultsTableHosts
           TABLE_NAME_HOSTS_OF_INTEREST:
             Ref: DerivedTableHostsOfInterest
+          RULE_TRIGGER_WORKER_LAMBDA:
+            Ref: onNmapEventRule
       Handler: onPopulateHostsOfInterestTable.handler
       MemorySize: 1024
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
@@ -599,9 +601,13 @@ Resources:
             Action: 
               - 'sqs:SendMessage'
             Resource: !GetAtt NmapWorkQueue.Arn
+          - Effect: Allow
+            Action:
+              - 'events:EnableRule'
+            Resource: 
+              - !GetAtt onNmapEventRule.Arn
       Roles:
         - !Ref onPopulateNmapWorkQueueExecutionRole
-
 
   onPopulateHostsOfInterestTableExecutionRole:
     Type: "AWS::IAM::Role"
