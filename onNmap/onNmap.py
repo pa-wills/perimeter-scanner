@@ -9,6 +9,9 @@ import os
 
 def handler(event, context):
 
+    print("event: " + str(event))
+    print("context: " + str(context))
+
     outputDerivedHostsTableName = os.environ.get("HOSTS_OF_INTEREST_TABLE")
     outputHostPortsTableName = os.environ.get("HOST_PORTS_TABLE")
     workQueueName = os.environ.get("WORK_QUEUE")
