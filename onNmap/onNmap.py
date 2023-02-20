@@ -29,11 +29,10 @@ def handler(event, context):
     ):
         # TODO: Maybe it should also disable the trigger for this function.
         print("arn of rule that i need to disable: " + str(event["resources"][0]))
-        matches = re.finditer('\/(.*)$', str(event["resources"][0]))
+        matches = re.search('\/(.*)$', str(event["resources"][0]))
         events = boto3.client("events")
-        for match in matches:
-            response = events.disable_rule(Name = match)
-
+        response = events.disable_rule(Name = str(matches.group(1)))
+ 
         return {
             'statusCode': 200,
             'event': str(event),
