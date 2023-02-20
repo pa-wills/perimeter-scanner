@@ -551,7 +551,7 @@ Resources:
               - !GetAtt ResultsTableHostPorts.Arn
           - Effect: Allow
             Action:
-              - 'eventbridge:DisableRule'
+              - 'EventBridge:DisableRule'
             Resource: 
               - !GetAtt onNmapEventRule.Arn
       Roles:
