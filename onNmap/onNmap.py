@@ -27,12 +27,15 @@ def handler(event, context):
         AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == "0"
     ):
         # TODO: Maybe it should also disable the trigger for this function.
+        events = boto3.client("events")
+        response = events.disable_rule(Name = str(event["resources"][0]))
         print("rule that i need to disable: " + str(event["resources"][0]))
 
         return {
             'statusCode': 200,
             'event': str(event),
             'context': str(context),
+            'response': str(response),
             'body': json.dumps('Work queue was zero-depth. Exiting')
         }
 
