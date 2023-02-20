@@ -31,7 +31,8 @@ def handler(event, context):
         print("arn of rule that i need to disable: " + str(event["resources"][0]))
         matches = re.finditer('\/(.*)$', str(event["resources"][0]))
         events = boto3.client("events")
-        response = events.disable_rule(Name = str(matches[0]))
+        for match in matches:
+            response = events.disable_rule(Name = match)
 
         return {
             'statusCode': 200,
