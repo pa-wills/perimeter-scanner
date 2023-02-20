@@ -3,6 +3,7 @@ import datetime
 import json
 import nmap
 import os
+import re
 
 # This is the nmap worker function. It 1. pops a message from the queue it's paired with, 2. attempts to nmap the host referred to within,
 # 3. parses the results, 4. Writes the results out to the required tables
@@ -27,9 +28,10 @@ def handler(event, context):
         AttributeNames = ["ApproximateNumberOfMessages"])["Attributes"]["ApproximateNumberOfMessages"] == "0"
     ):
         # TODO: Maybe it should also disable the trigger for this function.
+        print("arn of rule that i need to disable: " + str(event["resources"][0]))
+        matches = re.finditer('\/(.*)$', str(event["resources"][0]))
         events = boto3.client("events")
-        response = events.disable_rule(Name = str(event["resources"][0]))
-        print("rule that i need to disable: " + str(event["resources"][0]))
+        response = events.disable_rule(Name = str(matches[0]))
 
         return {
             'statusCode': 200,
