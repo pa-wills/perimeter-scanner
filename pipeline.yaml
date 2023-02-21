@@ -85,9 +85,9 @@ Metadata:
 Resources:
   # What's here?
   # A pipeline, and separate CodeBuild project.
-  # S3 bucket for the artifacts, KMS key for SSE-KMS.
+  # S3 bucket for the artifacts, KMS key for SSE-KMS, ECR for the built container (for one of the lambdas).
   # Custom Resource for the purposes of cleaning out the bucket on deletion.
-  # Roles for CodePipeline, for CodeBuild and for Cloudformation. And obviously associated Policies.
+  # Roles for CodePipeline and for CodeBuild. And obviously associated Policies.
 
   ProjectPipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -122,11 +122,26 @@ Resources:
             BranchName: !Ref GitHubRepoBranch
             OutputArtifactFormat: "CODE_ZIP"
           RunOrder: 1
-      - Name: BuildAndTest
+      - Name: Build
+        Actions:
+        - Name: build
+          InputArtifacts:
+          - Name: "SourceArtifact"
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Version: "1"
+            Provider: CodeBuild
+          OutputArtifacts:
+          - Name: "BuildArtifact"
+          Configuration:
+            ProjectName: !Ref CodeBuildProject
+          RunOrder: 1
+      - Name: DevTest
         Actions:
         - Name: devtest-create-update-stack
           InputArtifacts:
-          - Name: "SourceArtifact"
+          - Name: "BuildArtifact"
           ActionTypeId:
             Category: Deploy
             Owner: AWS
@@ -138,16 +153,16 @@ Resources:
             StackName: PerimeterScanner-DevTest # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-devtest
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "KeyPairName": "pw-devtest"}'
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "KeyPairName": "pw-devtest", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}"}'
             RoleArn: !Ref DevTestCfnRoleArn
-            TemplatePath: "SourceArtifact::template.yaml"
+            TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref DevTestCodePipelineRoleArn
           RunOrder: 1
       - Name: Production
         Actions:
         - Name: production-create-update-stack
           InputArtifacts:
-          - Name: "SourceArtifact"
+          - Name: "BuildArtifact"
           ActionTypeId:
             Category: Deploy
             Owner: AWS
@@ -164,6 +179,33 @@ Resources:
             TemplatePath: "SourceArtifact::template.yaml"
           RoleArn: !Ref ProductionCodePipelineRoleArn
           RunOrder: 1
+
+  CodeBuildProject:
+    DependsOn: [PipelineOutputBucket]
+    Description: This is the build sub-stage.
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: ECR_REPO_NAME
+            Value: !Ref PipelineOutputRegistry
+          - Name: ECR_REPO_URI
+            Value: !GetAtt PipelineOutputRegistry.RepositoryUri
+          - Name: S3_BUCKET
+            Value: !Ref PipelineOutputBucket
+        Image: "aws/codebuild/amazonlinux2-x86_64-standard:4.0" # Using a modern image, matters. Got stuck on this for ages.
+        PrivilegedMode: true # This has to be set, because we're making docker containers.
+        Type: LINUX_CONTAINER
+      ServiceRole: !GetAtt
+        - CodeBuildTrustRole
+        - Arn
+      Source:
+        BuildSpec: "buildspec.yaml"
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 5
 
   PipelineOutputBucket:
     Type: AWS::S3::Bucket
@@ -184,6 +226,34 @@ Resources:
         BlockPublicPolicy: false
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+
+  # TODO: need a lifecycle policy to keep the last 5 images, say.
+  PipelineOutputRegistry:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryPolicyText: 
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: AllowCodeBuildToPush
+            Effect: "Allow"
+            Principal: "*" # TODO: least-priv this.
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:PutImage"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:UploadLayerPart"
+              - "ecr:CompleteLayerUpload"
+          - 
+            Sid: LambdaECRImageCrossAccountRetrievalPolicy
+            Effect: Allow
+            Action:
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+            Principal:
+              Service: lambda.amazonaws.com
 
   # https://stackoverflow.com/questions/48362572/aws-codepipeline-error-cross-account-pass-role-is-not-allowed
   # This bucket needs to be accessible from the destination accounts.
@@ -246,8 +316,6 @@ Resources:
               - "*"
       KeySpec: SYMMETRIC_DEFAULT
       KeyUsage: ENCRYPT_DECRYPT
-
-
 
   # Copying someone else's example of the common bucket cleaning scenario, for Lambda custom resources.
   # https://github.com/mike-mosher/custom-resource-s3-bucket-delete/blob/master/custom-resource.yml
@@ -327,6 +395,34 @@ Resources:
 
   # </copy>
 
+  CodeBuildTrustRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [codebuild.amazonaws.com]
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: CodeBuildRolePolicy # TODO: Use intrinsic function
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+                Resource: ["*"]
+              - Effect: Allow
+                Action:
+                  - 'cloudformation:*'
+                  - 'ecr:*'
+                  - 'events:*'
+                  - 'iam:*'
+                  - 's3:*'
+                Resource: '*'
+
   CodePipelineServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -365,36 +461,11 @@ Resources:
               - Effect: Allow
                 Action:
                   - 'sts:AssumeRole'
-                Resource: 
+                Resource:
                   - !Ref ProductionCodePipelineRoleArn
                   - !Ref DevTestCodePipelineRoleArn
               - Effect: Allow
                 Action:
-                  - 's3:*'
-                  - 'cloudformation:*'
-                Resource: '*'
-
-  # The creating user needs to have IAM::PassRole in order to make this work.
-  CloudFormationTrustRole:
-    Description: Creating service role in IAM for AWS CloudFormation
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: [cloudformation.amazonaws.com]
-          Action: sts:AssumeRole
-      Path: /
-      Policies:
-        - PolicyName: CloudFormationRolePolicy # TODO: Use intrinsic function
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'iam:*'
-                  - 'lambda:*'
                   - 's3:*'
                   - 'cloudformation:*'
                 Resource: '*'

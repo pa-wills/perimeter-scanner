@@ -7,6 +7,14 @@ Parameters:
     Description: "Please specify how often the worker should run"
     Default: "rate(2 hours)"
     Type: String
+  SchedulePopulateWorkQueuePeriodicityParameter:
+    Description: "Please specify how often the worker should run"
+    Default: "rate(7 days)"
+    Type: String
+  ScheduleNmapWorkerInvocationPeriodicityParameter:
+    Description: "Please specify how often the worker should run"
+    Default: "rate(10 minutes)"
+    Type: String
   DynamoDbRetentionPeriod:
     Description: "Please specify in seconds how long the DynamoDB table should retain its items for"
     Default: "315360000" # 10 years
@@ -27,6 +35,12 @@ Parameters:
     Type: String    
   KeyPairName:
     Description: "Please provide the name of the key pair corresponding to the EC2 worker"
+    Type: String
+  EcrRepoArn:
+    Description: "Please provide the ARN of the ECR repo in which the build containers are stored"
+    Type: String
+  EcrRepoUri:
+    Description: "Please provide the URI of the ECR repo in which the build containers are stored"
     Type: String
 
 Metadata:
@@ -66,7 +80,7 @@ Resources:
             - "\n"
             - - "#!/bin/bash"
               - "sudo yum update -y"
-              - "sudo yum install git pip -y"
+              - "sudo yum install git pip nmap -y"
 
               - "# recon-ng installation"
               - "cd /home/ec2-user"
@@ -180,6 +194,20 @@ Resources:
   ResultsBucket:
     Type: AWS::S3::Bucket
 
+  NmapWorkQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      # TODO: message retention should probably match the perioidicity of the quueue-populating lambda.
+      MessageRetentionPeriod: 604800 # 7 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NmapWorkQueueDLQ.Arn
+        maxReceiveCount: 5
+
+  NmapWorkQueueDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600 # 14 days
+
   ResultsTableHosts:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -234,10 +262,64 @@ Resources:
         AttributeName: "ttl"
         Enabled: true
 
+  ResultsTableHostPorts:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        -
+          AttributeName: "datetime"
+          AttributeType: "S"
+        -
+          AttributeName: "composite_HostIpUdpTcp"
+          AttributeType: "S"
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - 
+          IndexName: hostports-datetime-index # I have to trick it in order to overcome recent deletion, hence "2"
+          KeySchema:
+            -
+              AttributeName: "composite_HostIpUdpTcp"
+              KeyType: "HASH"
+            -
+              AttributeName: "datetime"
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: ALL
+      KeySchema:
+        -
+          AttributeName: "datetime"
+          KeyType: "HASH"
+        -
+          AttributeName: "composite_HostIpUdpTcp"
+          KeyType: "RANGE"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+      TimeToLiveSpecification:
+        AttributeName: "ttl"
+        Enabled: true
+
+  DerivedTableHostPortsOfInterest:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        -
+          AttributeName: "composite_HostIpUdpTcp"
+          AttributeType: "S"
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        -
+          AttributeName: "composite_HostIpUdpTcp"
+          KeyType: "HASH"
+      TimeToLiveSpecification:
+        AttributeName: "ttl"
+        Enabled: true
+
   onArrivalOfHostsStreamEvent:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: index.handler
+      CodeUri: .
       Description: 'The function that updates the Hosts of Interest table.'
       Environment:
         Variables:
@@ -250,56 +332,39 @@ Resources:
             StartingPosition: LATEST
             Stream:
               !GetAtt ResultsTableHosts.StreamArn
-      InlineCode: |
-        from boto3.dynamodb.conditions import Key
-
-        import boto3
-        import datetime
-        import json
-        import os
-
-        hostsOfInterestTableName = os.environ.get("TABLE_NAME_HOSTS_OF_INTEREST")
-
-        def handler(event, context):
-          dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
-          hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName)
-
-          for record in event["Records"]:
-            if record["eventName"] != "INSERT": 
-              continue
-            responseQuery = hostsOfInterestTable.query(
-              KeyConditionExpression = Key("host").eq(str(record["dynamodb"]["Keys"]["host"]["S"]))
-            )
-            datetimeString = str(datetime.datetime.now().isoformat())
-            if (responseQuery["Items"] == []):
-              hostsOfInterestTable.put_item(
-                Item = {
-                  "host": str(record["dynamodb"]["Keys"]["host"]["S"]),
-                  "DatetimeFirst": datetimeString,
-                  "DatetimeLast": datetimeString
-                }
-              )
-            else:
-              hostsOfInterestTable.update_item(
-                Key = {
-                  "host": str(record["dynamodb"]["Keys"]["host"]["S"])
-                },
-                UpdateExpression = "set DatetimeLast = :r",
-                ExpressionAttributeValues = {
-                  ":r": datetimeString
-                }
-              )
-
+      Handler: onArrivalOfHostsStreamEvent.handler
       MemorySize: 256
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 20
+
+  onArrivalOfHostPortsStreamEvent:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Description: 'The function that updates the HostPorts of Interest table.'
+      Environment:
+        Variables:
+          TABLE_NAME_HOSTPORTS_OF_INTEREST:
+            Ref: DerivedTableHostPortsOfInterest
+      Events:
+        DyDbEvent2:
+          Type: DynamoDB
+          Properties:
+            StartingPosition: LATEST
+            Stream:
+              !GetAtt ResultsTableHostPorts.StreamArn
+      Handler: onArrivalOfHostPortsStreamEvent.handler
+      MemorySize: 256
+      Role: !GetAtt onPopulateHostPortsOfInterestTableExecutionRole.Arn
       Runtime: python3.9
       Timeout: 20
 
   onArrivalOfResults:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: index.handler
-      Description: 'The function that parses the results, and uploads them.'
+      CodeUri: .
+      Description: 'The function that parses the results, uploads them.'
       Environment:
         Variables:
           DYNAMODB_TTL_OFFSET:
@@ -318,71 +383,56 @@ Resources:
                 Rules:
                   - Name: suffix
                     Value: "csv"
-      InlineCode: |
-        import boto3
-        import csv
-        import datetime
-        import json
-        import os
-
-        def handler(event, context):
-
-          tableName = str(os.environ.get('TABLE_NAME'))
-          ttl = int(datetime.datetime.now().timestamp()) + int(os.environ.get('DYNAMODB_TTL_OFFSET')) # I.e. Now + offset.
-
-          s3 = boto3.resource("s3")
-          s3Client = boto3.client("s3")
-  
-          dynamodb = boto3.resource('dynamodb', region_name="ap-southeast-2")
-          table = dynamodb.Table(tableName)
-
-          datetimeString = str(datetime.datetime.now().isoformat())
-          bucketName = str(event["Records"][0]["s3"]["bucket"]["name"])
-          objectKey = str(event["Records"][0]["s3"]["object"]["key"])
-
-          response = s3Client.get_object(Bucket = bucketName, Key = objectKey)
-          rawCsvData = str(response["Body"].read())
-
-          print("Bucket Name: " + bucketName)
-          print("Object Key: " + objectKey)
-
-          strippedCsvData = rawCsvData.strip("b\'").strip("\'")
-          lines = strippedCsvData.split("\\r\\n")
-          for line in lines:
-
-            # Tokenize data ready for ingestion.
-            line = line.replace("\"", "")
-            if (line == ""): continue
-            tokens = line.split(",")
-            if (tokens[0] == "host"): continue
-            print(tokens)
-    
-            # Ingest
-            response = table.put_item(
-              Item = {
-                'datetime': datetimeString,
-                'host': tokens[0],
-                'ip_address': tokens[1],
-                'region': tokens[2],
-                'country': tokens[3],
-                'latitude': tokens[4],
-                'longitude': tokens[5],
-                'notes': tokens[6],
-                'module': tokens[7],
-                'ttl': ttl
-              }
-            )
-          s3.Object(bucketName, objectKey).delete()
-
+      Handler: onArrivalOfResults.handler
       MemorySize: 256
       Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
       Runtime: python3.9
       Timeout: 20
 
+  onNmap:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: 'The nmap worker function.'
+      Environment:
+        Variables:
+          WORK_QUEUE:
+            Ref: NmapWorkQueue
+          HOST_PORTS_TABLE:
+            Ref: ResultsTableHostPorts
+          HOSTS_OF_INTEREST_TABLE:
+            Ref: DerivedTableHostsOfInterest
+      ImageUri: !Join
+        - ''
+        - - !Ref EcrRepoUri
+          - ':latest'
+      PackageType: Image
+      Role: !GetAtt onNmapExecutionRole.Arn
+      Timeout: 120
+
+  onNmapEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !Ref ScheduleNmapWorkerInvocationPeriodicityParameter
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt onNmap.Arn
+          Id: onNmapFunction
+
+  onNmapEventRuleLambdaPermission: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref onNmap
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt onNmapEventRule.Arn
+
+  # TODO: I'm going to need a custom resource to update the ImageURI to the latest item.
+  # E.g. aws lambda update-function-code --function-name  PerimeterScanner-DevTest-onNmap-XcpjqIJfhgM8 --image-uri 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest
+
   onPopulateHostsOfInterestTable:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: index.handler
+      CodeUri: .
       Description: 'The function that constructs the Hosts of Interest Table.'
       Environment:
         Variables:
@@ -392,71 +442,35 @@ Resources:
             Ref: ResultsTableHosts
           TABLE_NAME_HOSTS_OF_INTEREST:
             Ref: DerivedTableHostsOfInterest
-
-      InlineCode: |
-
-        from boto3.dynamodb.conditions import Key
-
-        import boto3
-        import json
-        import os
-
-        resultsTableName = os.environ.get('TABLE_NAME_RESULTS')
-        hostsOfInterestTableName = os.environ.get('TABLE_NAME_HOSTS_OF_INTEREST')
-
-        # resultsTableName = "PerimeterScanner-DevTest-ResultsTableHosts-GIMUXGIF94Z4"
-        # hostsOfInterestTableName = "PerimeterScanner-DevTest-ResultsTableHostsOfInterest-GIMUXGIF94Z4"
-
-        def handler(event, context):
-          dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
-          resultsTable = dynamodb.Table(resultsTableName)
-          hostsOfInterestTable = dynamodb.Table(hostsOfInterestTableName)
-    
-          # Step 1: get all the unique host names.
-          responseScan = resultsTable.scan()
-          items = responseScan["Items"]
-          while 'LastEvaluatedKey' in responseScan:
-            responseScan = resultsTable.scan(ExclusiveStartKey = responseScan['LastEvaluatedKey'])
-            items.extend(responseScan["Items"])
-          hosts = []
-          for item in items:
-            hosts.append(item["host"])
-          hosts = list(dict.fromkeys(hosts))
-          for host in hosts:
-            responseInsert = hostsOfInterestTable.put_item(
-              Item = {
-                "host" : host
-              }
-            )
-        
-          # Step 2: Get the datetime of the first and last values of each host.
-          for host in hosts:
-            responseQuery = resultsTable.query(
-              IndexName = "host-datetime-index",
-              KeyConditionExpression = Key("host").eq(str(host))
-            )
-            responseUpdate = hostsOfInterestTable.update_item(
-              Key = {
-                "host" : host
-              },
-              UpdateExpression = "set DatetimeFirst = :r, DatetimeLast = :s",
-              ExpressionAttributeValues = {
-                ":r": responseQuery["Items"][0]["datetime"],
-                ":s": responseQuery["Items"][len(responseQuery["Items"]) - 1]["datetime"]
-              }
-            )
-        
-          return {
-            'statusCode': 200,
-            'body': json.dumps('Hello from Lambda!'),
-            'count': len(hosts) #,
-          }
-
+      Handler: onPopulateHostsOfInterestTable.handler
       MemorySize: 1024
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
       Runtime: python3.9
       Timeout: 60
 
+  onPopulateNmapWorkQueue:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Description: 'The function that populates the Nmap work queue.'
+      Environment:
+        Variables:
+          TABLE_TO_SCAN:
+            Ref: DerivedTableHostsOfInterest
+          QUEUE_TO_POPULATE:
+            Ref: NmapWorkQueue
+          RULE_TRIGGER_WORKER_LAMBDA:
+            Ref: onNmapEventRule
+      Events:
+        QueuePopulationScheduleEvent:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref SchedulePopulateWorkQueuePeriodicityParameter
+      Handler: onPopulateNmapWorkQueue.handler
+      MemorySize: 1024
+      Role: !GetAtt onPopulateNmapWorkQueueExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 60
 
   onArrivalOfResultsExecutionRole:
     Type: "AWS::IAM::Role"
@@ -495,6 +509,105 @@ Resources:
                 - /*
       Roles:
         - !Ref onArrivalOfResultsExecutionRole
+
+  onNmapExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
+      Path: "/"
+
+  onNmapExecutionRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: policyForOnPopulateHostsOfInterestTableExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ecr:*' # TODO: tighten, for least priv.
+            Resource: !Ref EcrRepoArn
+          - Effect: Allow
+            Action:
+              - 'sqs:DeleteMessage'
+              - 'sqs:ReceiveMessage'
+              - 'sqs:GetQueueAttributes'
+            Resource: !GetAtt NmapWorkQueue.Arn
+          - Effect: Allow
+            Action:
+              - 'dynamodb:PutItem'
+              - 'dynamodb:UpdateItem'
+            Resource: 
+              - !GetAtt DerivedTableHostsOfInterest.Arn
+              - !GetAtt ResultsTableHostPorts.Arn
+          - Effect: Allow
+            Action:
+              - 'events:DisableRule'
+            Resource: 
+              - !GetAtt onNmapEventRule.Arn
+      Roles:
+        - !Ref onNmapExecutionRole
+
+  onPopulateNmapWorkQueueExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
+      Path: "/"
+
+  onPopulateNmapWorkQueueExecutionRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: policyForonPopulateNmapWorkQueueExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # TODO: Allow read from table.
+          # TODO: Allow write to queue.
+
+          # TODO: Delete this b/s.
+          - Effect: Allow
+            Action:
+              - 'dynamodb:DescribeStream'
+              - 'dynamodb:GetRecords'
+              - 'dynamodb:GetShardIterator'
+              - 'dynamodb:ListStreams'
+              - 'dynamodb:Query'
+              - 'dynamodb:Scan'
+            Resource: 
+              - !GetAtt DerivedTableHostsOfInterest.Arn
+          - Effect: Allow
+            Action: 
+              - 'sqs:SendMessage'
+            Resource: !GetAtt NmapWorkQueue.Arn
+          - Effect: Allow
+            Action:
+              - 'events:EnableRule'
+            Resource: 
+              - !GetAtt onNmapEventRule.Arn
+      Roles:
+        - !Ref onPopulateNmapWorkQueueExecutionRole
 
   onPopulateHostsOfInterestTableExecutionRole:
     Type: "AWS::IAM::Role"
@@ -547,6 +660,56 @@ Resources:
       Roles:
         - !Ref onPopulateHostsOfInterestTableExecutionRole
 
+  onPopulateHostPortsOfInterestTableExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
+      Path: "/"
+
+  onPopulateHostPortsOfInterestTableExecutionRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: policyForOnPopulateHostPortsOfInterestTableExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'dynamodb:DescribeStream'
+              - 'dynamodb:GetRecords'
+              - 'dynamodb:GetShardIterator'
+              - 'dynamodb:ListStreams'
+              - 'dynamodb:Query'
+              - 'dynamodb:Scan'
+            Resource: 
+              - !GetAtt DerivedTableHostPortsOfInterest.Arn
+              - !GetAtt ResultsTableHostPorts.Arn
+              - !Join
+                - ''
+                - - !GetAtt ResultsTableHostPorts.Arn
+                  - '/index/*'
+              - !Join
+                - ''
+                - - !GetAtt ResultsTableHostPorts.Arn
+                  - '/stream/*'
+          - Effect: Allow
+            Action: 
+              - 'dynamodb:PutItem'
+              - 'dynamodb:UpdateItem'
+            Resource: !GetAtt DerivedTableHostPortsOfInterest.Arn
+      Roles:
+        - !Ref onPopulateHostPortsOfInterestTableExecutionRole
 
   startEc2Instance:
     Type: AWS::Serverless::Function

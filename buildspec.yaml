@@ -1,0 +1,42 @@
+# Kudos to:
+
+# https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+# And... we're assuming Ubuntu.
+
+# Phase definitions: https://aws.amazon.com/blogs/apn/an-introduction-to-aws-codebuild/
+
+version: 0.2 # Turns out this matters - https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html#build-spec-ref-versions
+
+# I think there are essentially two challenges here, and I have combined them together, and i shouldn't have.
+# The first challenge is building the container for the lambda, pushing it to the ECR. The second - the familiar challenge - building, 
+# packaging and deploying the template. 
+
+# TODO: make CodeBuild check the provided repo for a latest image. If none exists - build it. Else - continue.
+# TODO: sam build, package as before, but inhibit the building of the container, which SAM wants to do by default.
+
+phases:
+  install:
+    runtime-versions:
+      docker: 20
+      python: 3.9
+  build:
+    commands:
+      # TODO: remove the ugly static refs.
+      # TODO: make CodeBuild check the provided repo for a latest image. If none exists - build it. Else - continue.
+      # TODO: also, maybe make it conditional on something under onNmap changing.
+
+      # Build the containers, tag, push to ECR.
+      - cd onNmap
+      - aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com # ap-southeast-2 and account specific. TODO.
+      - docker build -t $ECR_REPO_NAME .
+      - docker tag $ECR_REPO_NAME:latest 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPO_NAME:latest
+      - docker push $ECR_REPO_URI:latest
+
+      # Build and package everything else.
+      - cd ..
+      - sam build
+      - sam package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml --force-upload  --image-repository $ECR_REPO_URI
+
+artifacts:
+  files:
+    - "**/*"
