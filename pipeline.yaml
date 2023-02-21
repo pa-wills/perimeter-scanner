@@ -101,8 +101,9 @@ Resources:
         Location: !Ref PipelineOutputBucket
         Type: S3
       DisableInboundStageTransitions:
-        - - Reason: "Disable auto-transition as a protective measure."
-          - StageName: "Production"
+        -
+          Reason: "Disable auto-transition as a protective measure."
+          StageName: "Production"
       RoleArn: !GetAtt
         - CodePipelineServiceRole
         - Arn
@@ -177,9 +178,9 @@ Resources:
             StackName: PerimeterScanner-Prod # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-prod
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000", "KeyPairName": "pw-prod"}'
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000", "KeyPairName": "pw-prod", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}"}'
             RoleArn: !Ref ProductionCfnRoleArn
-            TemplatePath: "SourceArtifact::template.yaml"
+            TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref ProductionCodePipelineRoleArn
           RunOrder: 1
 

@@ -266,7 +266,6 @@ Resources:
 
   ResultsTableHostPorts:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
     Properties:
       AttributeDefinitions:
         -
@@ -305,7 +304,6 @@ Resources:
 
   DerivedTableHostPortsOfInterest:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
     Properties:
       AttributeDefinitions:
         -
