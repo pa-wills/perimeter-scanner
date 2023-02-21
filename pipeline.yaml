@@ -100,6 +100,9 @@ Resources:
           Type: KMS 
         Location: !Ref PipelineOutputBucket
         Type: S3
+      DisableInboundStageTransitions:
+        - - Reason: "Disable auto-transition as a protective measure."
+          - StageName: "Production"
       RoleArn: !GetAtt
         - CodePipelineServiceRole
         - Arn
