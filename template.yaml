@@ -202,6 +202,7 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt NmapWorkQueueDLQ.Arn
         maxReceiveCount: 5
+      VisibilityTimeout: 300 # Idiotically i allowed this to be set *lower* than the lambda worker's timeout setting.
 
   NmapWorkQueueDLQ:
     Type: AWS::SQS::Queue
