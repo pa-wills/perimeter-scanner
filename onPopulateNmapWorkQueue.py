@@ -3,7 +3,7 @@ import datetime
 import json
 import os
 
-thresholdSecs = (3600 * 24 * 7) # I.e. 1 week
+thresholdSecs = (3600 * 24 * 7) # I.e. 1 week. TODO: parameterize.
 
 def handler(event, context):
 	dynamodb = boto3.resource("dynamodb", region_name = "ap-southeast-2")
@@ -21,19 +21,44 @@ def handler(event, context):
 		responseScan = inputTable.scan(ExclusiveStartKey = responseScan['LastEvaluatedKey'])
 		items.extend(responseScan["Items"])
 	
-	# Iterate. If never nmaped, or not for thresholdSecs seconds: enqueue.
+	
 	for item in items:
-		if "DatetimeLastNmaped" not in item:
+		# If never enqueued, or not enqueued for thresholdSecs seconds: enqueue.
+		now = datetime.datetime.now()
+		if "DatetimeLastEnqueued" not in item:
 			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
+			responseUpdate = inputTable.update_item(
+				Key = {
+					"host" : str(item["host"])
+				},
+				UpdateExpression = "set DatetimeLastEnqueued = :r",
+				ExpressionAttributeValues = {
+					":r": str(now)
+				}
+			)
+			continue
+
+		# If enqueued previously but not yet run to completion: continue.
+		# TODO: allow for corner case of first ever run failing. Want retry after thresholdSecs.
+		elif "DatetimeLastNmaped" not in item:
 			continue
 		
-		now = datetime.datetime.now()
-		datetimeLastNmaped = datetime.datetime.fromisoformat(item["DatetimeLastNmaped"])
-		deltaSecs = int((now - datetimeLastNmaped).total_seconds())
-		if (deltaSecs > thresholdSecs):
+		# If not enqueued for > thresholdSecs: enqueue.
+		datetimeLastEnqueued = datetime.datetime.fromisoformat(item["DatetimeLastEnqueued"])
+		deltaSecsSinceLastEnqueued = int((now - datetimeLastEnqueued).total_seconds())
+		if ((deltaSecsSinceLastEnqueued > thresholdSecs) and ()):
 			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
+			responseUpdate = inputTable.update_item(
+				Key = {
+					"host" : str(item["host"])
+				},
+				UpdateExpression = "set DatetimeLastEnqueued = :r",
+				ExpressionAttributeValues = {
+					":r": str(now)
+				}
+			)
 
-	# TODO: Implement enablement of the nmap triggering rule.
+	# Enable the nmap triggering rule.
 	events = boto3.client("events")
 	response = events.enable_rule(Name = workerLambdaRuleName)
 
