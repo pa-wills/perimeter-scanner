@@ -67,7 +67,7 @@ Resources:
         Timeout: PT5M
     DependsOn: WorkerInstanceProfile # If the IAM objects aren't there, then the aws cli invocations in the UserData won't be authorised.
     Properties:
-      ImageId: "ami-0d0175e9dbb94e0d2"
+      ImageId: "ami-066afac102d181674"
       IamInstanceProfile: !Ref WorkerInstanceProfile
       InstanceType: "t2.micro"
       KeyName: !Ref KeyPairName
