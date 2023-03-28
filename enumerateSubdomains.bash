@@ -91,6 +91,7 @@ rm /home/ec2-user/.recon-ng/workspaces/$PSCAN_RECONNG_WORKSPACE/results.csv
 
 # All done. Wait a nominal period, and then stop the instance.
 sleep 60
-INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
+TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id -H "X-aws-ec2-metadata-token: $TOKEN")
 aws ec2 stop-instances --instance-ids $INSTANCE_ID --region ap-southeast-2
 
