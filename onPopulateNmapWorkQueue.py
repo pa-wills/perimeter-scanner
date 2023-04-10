@@ -46,7 +46,7 @@ def handler(event, context):
 		# If not enqueued for > thresholdSecs: enqueue.
 		datetimeLastEnqueued = datetime.datetime.fromisoformat(item["DatetimeLastEnqueued"])
 		deltaSecsSinceLastEnqueued = int((now - datetimeLastEnqueued).total_seconds())
-		if ((deltaSecsSinceLastEnqueued > thresholdSecs) and ()):
+		if ((deltaSecsSinceLastEnqueued > thresholdSecs)):
 			sqsClient.send_message(QueueUrl = outputQueueName, MessageBody = str(item["host"]))
 			responseUpdate = inputTable.update_item(
 				Key = {
