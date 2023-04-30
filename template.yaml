@@ -127,9 +127,13 @@ Resources:
                   - " --resource WorkerInstance --region "
                   - !Ref 'AWS::Region'
 
-              - "# Stop the instance (we don't run enumeration on the launch boot)."
+              - "# Require use of IMDSv2"
+              - "# Annoyingly - I can't set this staticly using the CFN template. Doing it after the event from the command line feels hacky."
               - "TOKEN=`curl -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\"`"
               - "INSTANCEID=\"$(curl http://169.254.169.254/latest/meta-data/instance-id -H \"X-aws-ec2-metadata-token: $TOKEN\")\"" # You can't use a !Ref without causing a circular reference.
+              - "aws ec2 modify-instance-metadata-options --instance-id $INSTANCEID --http-tokens required --http-endpoint enabled --http-put-response-hop-limit 1 region —ap-southeast-2"
+
+              - "# Stop the instance (we don't run enumeration on the launch boot)."
               - "aws ec2 stop-instances --instance-ids $INSTANCEID --region ap-southeast-2"
 
   WorkerInstanceSecurityGroup:
@@ -188,6 +192,8 @@ Resources:
           - Effect: Allow
             Action: 
               - 'ec2:StopInstances'
+              - 'ec2:DescribeInstances'
+              - 'ec2:ModifyInstanceMetadataOptions'
             Resource: '*' # You'd want to constrain this to an Instance, but how to do so without a circular reference?
       Roles:
         - !Ref WorkerInstanceRole
