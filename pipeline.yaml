@@ -51,6 +51,10 @@ Parameters:
     Description: "Please provide a comma-delimited list of domains to enumerate"
     Default: ""
     Type: String
+  PipelineEncryptionKey:
+    Type: String
+    Description: "The ARN of the KMS key to be used to encrypt CodePipeline artifacts."
+    Default: "arn:aws:kms:ap-southeast-2:623056247312:key/40255820-b100-4be1-b3fa-9706ccdc2588"
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -69,6 +73,7 @@ Metadata:
           - GitHubFullRepoID
           - GitHubRepoBranch
           - GitHubPersonalAccessToken
+          - PipelineEncryptionKey
       - 
         Label: 
           default: "DevTest Stage"
@@ -96,7 +101,7 @@ Resources:
     Properties:
       ArtifactStore:
         EncryptionKey:
-          Id: !GetAtt PipelineEncryptionKey.Arn
+          Id: !Ref PipelineEncryptionKey
           Type: KMS 
         Location: !Ref PipelineOutputBucket
         Type: S3
@@ -279,47 +284,6 @@ Resources:
             - !Ref ProductionCfnRoleArn
             - !Ref DevTestCodePipelineRoleArn
             - !Ref ProductionCodePipelineRoleArn
-
-  # TODO: I am probably going to have multiple pipelines, and I don't want one Key for each.
-  # So, perhaps break this out into a shared services stack w/in this CICD account.
-  PipelineEncryptionKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: Key for SSE-KMS on the Pipeline Bucket.
-      Enabled: true
-      EnableKeyRotation: false
-      KeyPolicy:
-        Version: 2012-10-17
-        Id: keyForPipelineArtifactEncryption
-        Statement:
-          - Sid: "Allow access through S3 for all principals in accounts needing to use the bucket."
-            Principal: 
-              AWS: "*"
-            Effect: Allow
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource:
-              - "*"
-            #Condition:
-              # TODO: where caller accounts, and Via service???
-          - Sid: "Allow administration of the key."
-            Principal: 
-              AWS: [
-                !Sub "arn:aws:iam::${AWS::AccountId}:root", 
-                !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-reserved/sso.amazonaws.com/ap-southeast-2/AWSReservedSSO_AWSAdministratorAccess_40a020b2fd86f86c"
-              ] 
-              # TODO: use intrinsic function to get the current SSO role identity, above. Is it even necesssary?
-            Effect: Allow
-            Action:
-              - kms:*
-            Resource:
-              - "*"
-      KeySpec: SYMMETRIC_DEFAULT
-      KeyUsage: ENCRYPT_DECRYPT
 
   # Copying someone else's example of the common bucket cleaning scenario, for Lambda custom resources.
   # https://github.com/mike-mosher/custom-resource-s3-bucket-delete/blob/master/custom-resource.yml
