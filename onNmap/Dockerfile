@@ -1,4 +1,4 @@
-FROM public.ecr.aws/lambda/python:3.8
+FROM public.ecr.aws/lambda/python:3.10.2023.05.06.17-x86_64
 
 RUN yum install git -y
 RUN pip install python-nmap

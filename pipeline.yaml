@@ -272,18 +272,24 @@ Resources:
       Bucket: !Ref PipelineOutputBucket
       PolicyDocument:
         Statement:
-        - Effect: Allow
-          Action: ["s3:*"]
-          Resource:
-          - !Sub "arn:aws:s3:::${PipelineOutputBucket}"
-          - !Sub "arn:aws:s3:::${PipelineOutputBucket}/*"
-          Principal:
-            AWS:
-            - !GetAtt CodePipelineServiceRole.Arn
-            - !Ref DevTestCfnRoleArn
-            - !Ref ProductionCfnRoleArn
-            - !Ref DevTestCodePipelineRoleArn
-            - !Ref ProductionCodePipelineRoleArn
+          - Effect: Deny
+            Principal: "*"
+            Action: "*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": false
+          - Effect: Allow
+            Action: ["s3:*"]
+            Resource:
+              - !Sub "arn:aws:s3:::${PipelineOutputBucket}"
+              - !Sub "arn:aws:s3:::${PipelineOutputBucket}/*"
+            Principal:
+              AWS:
+                - !GetAtt CodePipelineServiceRole.Arn
+                - !Ref DevTestCfnRoleArn
+                - !Ref ProductionCfnRoleArn
+                - !Ref DevTestCodePipelineRoleArn
+                - !Ref ProductionCodePipelineRoleArn
 
   # Copying someone else's example of the common bucket cleaning scenario, for Lambda custom resources.
   # https://github.com/mike-mosher/custom-resource-s3-bucket-delete/blob/master/custom-resource.yml
@@ -353,6 +359,14 @@ Resources:
                   - s3:DeleteObject
                   - kms:*
                 Resource: '*'
+        - PolicyName: KMSPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:*
+                Resource: !Ref PipelineEncryptionKey
 
   CustomResource:
     Type: Custom::CustomResource

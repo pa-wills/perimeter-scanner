@@ -134,6 +134,8 @@ Resources:
               - "INSTANCEID=\"$(curl http://169.254.169.254/latest/meta-data/instance-id -H \"X-aws-ec2-metadata-token: $TOKEN\")\"" # You can't use a !Ref without causing a circular reference.
               - "aws ec2 modify-instance-metadata-options --instance-id $INSTANCEID --http-tokens required --http-endpoint enabled --http-put-response-hop-limit 1 region —ap-southeast-2"
 
+              - "sudo chmod 755 /home/ec2-user"
+
               - "# Stop the instance (we don't run enumeration on the launch boot)."
               - "aws ec2 stop-instances --instance-ids $INSTANCEID --region ap-southeast-2"
 
@@ -258,6 +260,8 @@ Resources:
         -
           AttributeName: "host"
           KeyType: "HASH"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       TimeToLiveSpecification:
         AttributeName: "ttl"
         Enabled: true
@@ -312,6 +316,8 @@ Resources:
         -
           AttributeName: "composite_HostIpUdpTcp"
           KeyType: "HASH"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       TimeToLiveSpecification:
         AttributeName: "ttl"
         Enabled: true
