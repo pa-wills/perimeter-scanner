@@ -274,7 +274,10 @@ Resources:
         Statement:
           - Effect: Deny
             Principal: "*"
-            Action: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::${PipelineOutputBucket}"
+              - !Sub "arn:aws:s3:::${PipelineOutputBucket}/*"
             Condition:
               Bool:
                 "aws:SecureTransport": false
@@ -290,6 +293,9 @@ Resources:
                 - !Ref ProductionCfnRoleArn
                 - !Ref DevTestCodePipelineRoleArn
                 - !Ref ProductionCodePipelineRoleArn
+
+
+
 
   # Copying someone else's example of the common bucket cleaning scenario, for Lambda custom resources.
   # https://github.com/mike-mosher/custom-resource-s3-bucket-delete/blob/master/custom-resource.yml

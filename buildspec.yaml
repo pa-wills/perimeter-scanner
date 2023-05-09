@@ -29,8 +29,8 @@ phases:
       - cd onNmap
       - aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com # ap-southeast-2 and account specific. TODO.
       - docker build -t $ECR_REPO_NAME .
-      - docker tag $ECR_REPO_NAME:latest 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPO_NAME:latest
-      - docker push $ECR_REPO_URI:latest
+      - docker tag $ECR_REPO_NAME 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPO_NAME
+      - docker push $ECR_REPO_URI
 
       # Build and package everything else.
       - cd ..
