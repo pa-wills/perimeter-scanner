@@ -289,13 +289,17 @@ Resources:
             Principal:
               AWS:
                 - !GetAtt CodePipelineServiceRole.Arn
+          - Effect: Allow
+            Action: ["s3:Get*"]
+            Resource:
+              - !Sub "arn:aws:s3:::${PipelineOutputBucket}"
+              - !Sub "arn:aws:s3:::${PipelineOutputBucket}/*"
+            Principal:
+              AWS:
                 - !Ref DevTestCfnRoleArn
                 - !Ref ProductionCfnRoleArn
                 - !Ref DevTestCodePipelineRoleArn
                 - !Ref ProductionCodePipelineRoleArn
-
-
-
 
   # Copying someone else's example of the common bucket cleaning scenario, for Lambda custom resources.
   # https://github.com/mike-mosher/custom-resource-s3-bucket-delete/blob/master/custom-resource.yml
