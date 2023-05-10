@@ -369,14 +369,6 @@ Resources:
                   - s3:DeleteObject
                   - kms:*
                 Resource: '*'
-        - PolicyName: KMSPolicy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - kms:*
-                Resource: !Ref PipelineEncryptionKey
 
   CustomResource:
     Type: Custom::CustomResource
