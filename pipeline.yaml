@@ -17,12 +17,12 @@ Parameters:
     Default: "arn:aws:codestar-connections:ap-southeast-2:623056247312:connection/e23152ba-62a3-4321-93a5-314cf6858b87"
   DevTestCfnRoleArn:
     Type: String
-    Description: "The Role that will be assumed by CloudFormation in order to deploy DevTest resources."
-    Default: "arn:aws:iam::494507141278:role/cf-execution-role-devtest"
+    Description: "The Role that will be assumed by CloudFormation in order to deploy DevTest resources. Created by the perimeter-scanner-cross-account-roles StackSet (crossAccountRoles.yaml)."
+    Default: "arn:aws:iam::494507141278:role/perimeter-scanner-cf-execution-role-devtest"
   DevTestCodePipelineRoleArn:
     Type: String
-    Description: "The Role that will be assumed by the CodePipeline in order to execute the DevTest stage."
-    Default: "arn:aws:iam::494507141278:role/cross-account-role-devtest"
+    Description: "The Role that will be assumed by the CodePipeline in order to execute the DevTest stage. Created by the perimeter-scanner-cross-account-roles StackSet (crossAccountRoles.yaml)."
+    Default: "arn:aws:iam::494507141278:role/perimeter-scanner-cross-account-role-devtest"
   GitHubFullRepoID:
     Type: String
     Description: "The GitHub repo's name."
@@ -37,12 +37,12 @@ Parameters:
     Default: "/perimeter-scanner-app/GitHubPersonalAccessToken" # Storing it here for the moment. TODO: use SecureString.
   ProductionCfnRoleArn:
     Type: String
-    Description: "The Role that will be assumed by CloudFormation in order to deploy production resources."
-    Default: "arn:aws:iam::732786819153:role/cf-execution-role-prod"
+    Description: "The Role that will be assumed by CloudFormation in order to deploy production resources. Created by the perimeter-scanner-cross-account-roles StackSet (crossAccountRoles.yaml)."
+    Default: "arn:aws:iam::732786819153:role/perimeter-scanner-cf-execution-role-prod"
   ProductionCodePipelineRoleArn:
     Type: String
-    Description: "The Role that will be assumed by the CodePipeline in order to execute the Production stage."
-    Default: "arn:aws:iam::732786819153:role/cross-account-role-prod"
+    Description: "The Role that will be assumed by the CodePipeline in order to execute the Production stage. Created by the perimeter-scanner-cross-account-roles StackSet (crossAccountRoles.yaml)."
+    Default: "arn:aws:iam::732786819153:role/perimeter-scanner-cross-account-role-prod"
   ReconngWorkspaceName:
     Description: "Please specify the Workspace Name to be used"
     Default: ""
