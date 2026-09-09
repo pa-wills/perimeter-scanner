@@ -55,6 +55,16 @@ Parameters:
     Type: String
     Description: "The ARN of the KMS key to be used to encrypt CodePipeline artifacts."
     Default: "arn:aws:kms:ap-southeast-2:623056247312:key/7f51caf1-758f-4fa2-9618-06dba104faa7" # alias/CodePipelineArtifactEncryptionKey-norotate; the previous key (40255820) was scheduled for deletion.
+  DevTestAccountId:
+    Type: String
+    Description: "DevTest workload account ID - allowed to pull images from the build ECR repo."
+    Default: "494507141278"
+    AllowedPattern: '\d{12}'
+  ProductionAccountId:
+    Type: String
+    Description: "Production workload account ID - allowed to pull images from the build ECR repo."
+    Default: "732786819153"
+    AllowedPattern: '\d{12}'
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -240,13 +250,13 @@ Resources:
   PipelineOutputRegistry:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryPolicyText: 
+      RepositoryPolicyText:
         Version: "2012-10-17"
         Statement:
-          -
-            Sid: AllowCodeBuildToPush
-            Effect: "Allow"
-            Principal: "*" # TODO: least-priv this.
+          - Sid: AllowCodeBuildToPush
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt CodeBuildTrustRole.Arn
             Action:
               - "ecr:GetDownloadUrlForLayer"
               - "ecr:BatchGetImage"
@@ -255,14 +265,26 @@ Resources:
               - "ecr:InitiateLayerUpload"
               - "ecr:UploadLayerPart"
               - "ecr:CompleteLayerUpload"
-          - 
-            Sid: LambdaECRImageCrossAccountRetrievalPolicy
+          # onNmap (container Lambda in DevTest/Prod) is pulled by the Lambda service.
+          - Sid: LambdaECRImageCrossAccountRetrievalPolicy
             Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
             Action:
               - ecr:BatchGetImage
               - ecr:GetDownloadUrlForLayer
+          # DevTest/Prod roles (e.g. the Phase 2 Fargate task execution role) pulling
+          # images cross-account; still gated by those roles' own IAM policies.
+          - Sid: AllowCrossAccountPull
+            Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
+              AWS:
+                - !Sub "arn:aws:iam::${DevTestAccountId}:root"
+                - !Sub "arn:aws:iam::${ProductionAccountId}:root"
+            Action:
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchCheckLayerAvailability
 
   # https://stackoverflow.com/questions/48362572/aws-codepipeline-error-cross-account-pass-role-is-not-allowed
   # This bucket needs to be accessible from the destination accounts.
