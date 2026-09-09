@@ -1,210 +1,339 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description: Service-managed StackSet that deploys the perimeter-scanner cross-account roles to every target account.
 
-# Dedicated cross-account deployment roles for perimeter-scanner.
+# Enclosing stack for the perimeter-scanner-cross-account-roles StackSet.
+# Modelled on pwdotcom's PwDotCom-StackSetCrossAccountRoles: deploy this one
+# stack, from the CICD account (623056247312) acting as a StackSets delegated
+# administrator, and it both defines the StackSet and fans it out to the
+# DevTest/Prod OUs. Do not deploy it from the Organization management account.
 #
-# Structure and mechanism deliberately mirror the pwdotcom-cross-account-roles
-# StackSet (same Environment parameter, per-env role naming via !Join, ARN
-# Outputs). This template is the StackSet's TemplateBody - there is no
-# AWS::CloudFormation::StackSet wrapper resource; the StackSet is created
-# out-of-band from the CICD account as a StackSets delegated administrator.
-# See README.md "Instructions" for the create-stack-set / create-stack-instances
-# commands.
+# SERVICE_MANAGED StackSets can only be created by the management account or a
+# registered delegated administrator, so CICD must first be registered for the
+# stacksets.cloudformation.amazonaws.com service principal (a one-time
+# `aws organizations register-delegated-administrator`, run with the management
+# account's credentials).
 #
-# Why a dedicated set rather than the shared cross-account-role-{env}:
-# those come from a StackSet owned by the peterwills.com project, which has
-# diverged (its cf-execution-role lost ec2/dynamodb/sqs/ecr/events) and whose
-# managed policy carries wildcards flagged by Security Hub IAM.21 / KMS.1.
-# Resource names here are prefixed "perimeter-scanner-" so both sets coexist in
-# the same accounts without collision.
+# The child role template used to be this file's whole contents (referenced
+# out-of-band as the StackSet's TemplateBody). It is small enough to inline
+# directly below - the tags inside that block (!Ref, !Sub, !GetAtt, !Join) are
+# plain text to this outer template and are only evaluated when the StackSet
+# deploys the child into a target account.
 
 Parameters:
-  CiCdAccountId:
-    Description: Account ID of the CICD account whose CodePipeline assumes the action role.
+  DevTestOrganizationalUnitId:
+    Description: OU ID containing the DevTest target account (and no other stack-set target).
     Type: String
-    Default: '623056247312'
-    AllowedPattern: '\d{12}'
-    MinLength: 12
-    MaxLength: 12
-  Environment:
-    Description: Environment corresponding to this account (set per stack instance).
+    AllowedPattern: '^ou-[0-9a-z]{4,32}-[0-9a-z]{8,32}$'
+    Default: 'ou-8me6-lphnkp1y'
+  ProdOrganizationalUnitId:
+    Description: OU ID containing the Prod target account (and no other stack-set target).
     Type: String
-    AllowedValues: ['devtest', 'prod']
-    Default: 'devtest'
+    AllowedPattern: '^ou-[0-9a-z]{4,32}-[0-9a-z]{8,32}$'
+    Default: 'ou-8me6-u6ss8udg'
   PipelineArtifactBucketArn:
-    Description: ARN (may contain a trailing wildcard) of the CICD pipeline's artifact bucket, which the action role reads packaged templates from.
+    Description: ARN (may contain a trailing wildcard) of the CICD pipeline's artifact bucket, passed through to the child template's action-role policy.
     Type: String
     Default: 'arn:aws:s3:::perimeterscanner-app-pipelineoutputbucket-*'
   PipelineKmsKeyArn:
-    Description: ARN of the KMS key the CICD pipeline encrypts its artifacts with; the action role needs Decrypt to read them.
+    Description: ARN of the KMS key the CICD pipeline encrypts artifacts with, passed through to the child template's action-role policy.
     Type: String
     Default: 'arn:aws:kms:ap-southeast-2:623056247312:key/7f51caf1-758f-4fa2-9618-06dba104faa7'
 
 Resources:
 
-  # ------------------------------------------------------------------
-  # Action role: assumed by the CICD account's CodePipeline to run the
-  # CloudFormation deploy action for PerimeterScanner-{DevTest,Prod}.
-  # Least-privilege by construction - no bare service:* action, no kms:*,
-  # resources scoped - so it clears Security Hub IAM.21 and KMS.1.
-  # ------------------------------------------------------------------
-  PerimeterScannerCrossAccountRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Join ['-', ['perimeter-scanner-cross-account-role', !Ref Environment]]
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS:
-                - !Sub 'arn:aws:iam::${CiCdAccountId}:root'
-            Action:
-              - sts:AssumeRole
-
-  PerimeterScannerCicdDeployPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: perimeter-scanner-cicd-deploy-policy
-      Description: Least-privilege permissions for the CICD pipeline's cross-account CloudFormation deploy action.
-      Roles:
-        - !Ref PerimeterScannerCrossAccountRole
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-
-          # CloudFormation stack operations, scoped to this project's stacks.
-          # ActionMode CREATE_UPDATE calls CreateStack/UpdateStack directly and
-          # polls Describe*; the change-set actions are harmless extras.
-          - Sid: CfnStackOps
-            Effect: Allow
-            Action:
-              - cloudformation:CreateStack
-              - cloudformation:UpdateStack
-              - cloudformation:DeleteStack
-              - cloudformation:CreateChangeSet
-              - cloudformation:DeleteChangeSet
-              - cloudformation:ExecuteChangeSet
-              - cloudformation:DescribeChangeSet
-              - cloudformation:DescribeStacks
-              - cloudformation:DescribeStackEvents
-              - cloudformation:DescribeStackResource
-              - cloudformation:DescribeStackResources
-              - cloudformation:ListStackResources
-              - cloudformation:GetTemplate
-              - cloudformation:GetTemplateSummary
-              - cloudformation:SetStackPolicy
-              - cloudformation:UpdateTerminationProtection
-            Resource:
-              - !Sub 'arn:aws:cloudformation:*:${AWS::AccountId}:stack/PerimeterScanner-*/*'
-
-          # Template validation has no resource-level support.
-          - Sid: CfnValidate
-            Effect: Allow
-            Action:
-              - cloudformation:ValidateTemplate
-            Resource: '*'
-
-          # Hand the CloudFormation execution role to the CloudFormation service.
-          - Sid: PassExecutionRole
-            Effect: Allow
-            Action:
-              - iam:PassRole
-            Resource:
-              - !GetAtt PerimeterScannerCfExecutionRole.Arn
-            Condition:
-              StringEquals:
-                iam:PassedToService: cloudformation.amazonaws.com
-          - Sid: GetExecutionRole
-            Effect: Allow
-            Action:
-              - iam:GetRole
-            Resource:
-              - !GetAtt PerimeterScannerCfExecutionRole.Arn
-
-          # Read the packaged template + build artifacts from the CICD account's
-          # artifact bucket (cross-account).
-          - Sid: ReadPipelineArtifacts
-            Effect: Allow
-            Action:
-              - s3:GetObject
-              - s3:GetObjectVersion
-              - s3:GetBucketVersioning
-              - s3:GetBucketLocation
-              - s3:ListBucket
-            Resource:
-              - !Ref PipelineArtifactBucketArn
-              - !Sub '${PipelineArtifactBucketArn}/*'
-
-          # Decrypt those artifacts (bucket is SSE-KMS with the pipeline key).
-          - Sid: DecryptPipelineArtifacts
-            Effect: Allow
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-              - kms:DescribeKey
-            Resource:
-              - !Ref PipelineKmsKeyArn
-
-  # ------------------------------------------------------------------
-  # Execution role: assumed by the CloudFormation service to CRUD the
-  # resources in template.yaml. Emulates the pwdotcom CFExecutionRole
-  # shape (inline policy, service:* action wildcards) but with the
-  # service list this project actually needs. Only the CloudFormation
-  # service can assume it. Inline policies are out of scope for IAM.21.
+  # CloudFormation service role for THIS stack's own deploys (Security Hub
+  # CloudFormation.4). Same self-bootstrap as pwdotcom's
+  # StackSetCfExecutionRole: the first deploy that creates it runs ad hoc,
+  # every deploy after passes --role-arn to it.
   #
-  # Restores ec2/dynamodb/sqs/ecr/events (which the shared, diverged
-  # role had lost) and adds ecs/scheduler/logs for the Phase 2 ECS
-  # Fargate re-platform. No cloudfront (that was pwdotcom-only), no kms:*.
-  # ------------------------------------------------------------------
-  PerimeterScannerCfExecutionRole:
+  # Needs cloudformation:* to manage the StackSet resource + its instances,
+  # plus read-only organizations:* - a SERVICE_MANAGED StackSet operation run
+  # as a delegated admin resolves its OU targets by enumerating the org and
+  # fails with an organizations:List* AccessDenied without them. The org
+  # actions are read-only and have no resource-level scoping.
+  StackSetCfExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Join ['-', ['perimeter-scanner-cf-execution-role', !Ref Environment]]
+      RoleName: perimeter-scanner-stackset-cf-execution-role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
           - Effect: Allow
             Principal:
-              Service:
-                - cloudformation.amazonaws.com
-            Action:
-              - sts:AssumeRole
+              Service: cloudformation.amazonaws.com
+            Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: PerimeterScannerCfExecutionRolePolicy
+        - PolicyName: StackSetStackExecutionPolicy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
               - Effect: Allow
                 Action:
                   - 'cloudformation:*'
-                  - 'dynamodb:*'
-                  - 'ec2:*'
-                  - 'ecr:*'
-                  - 'ecs:*'
-                  - 'events:*'
-                  - 'iam:*'
-                  - 'lambda:*'
-                  - 'logs:*'
-                  - 's3:*'
-                  - 'scheduler:*'
-                  - 'sqs:*'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'organizations:DescribeOrganization'
+                  - 'organizations:DescribeOrganizationalUnit'
+                  - 'organizations:DescribeAccount'
+                  - 'organizations:ListRoots'
+                  - 'organizations:ListParents'
+                  - 'organizations:ListChildren'
+                  - 'organizations:ListOrganizationalUnitsForParent'
+                  - 'organizations:ListAccountsForParent'
+                  - 'organizations:ListAccounts'
+                  - 'organizations:ListDelegatedAdministrators'
+                  - 'organizations:ListAWSServiceAccessForOrganization'
                 Resource: '*'
 
-Outputs:
-  OutPerimeterScannerCrossAccountRole:
-    Description: Cross-account (CodePipeline action) role ARN.
-    Value: !GetAtt PerimeterScannerCrossAccountRole.Arn
-    Export:
-      Name: !Join ['-', ['PerimeterScanner-CrossAccountRoleArn', !Ref Environment]]
+  CrossAccountRolesStackSet:
+    Type: AWS::CloudFormation::StackSet
+    # Retain: deleting this enclosing stack must not tear down the
+    # cross-account roles the pipeline depends on (it would just orphan the
+    # StackSet back to unmanaged). Also required for the initial resource
+    # import that brought the pre-existing StackSet under this stack.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      StackSetName: perimeter-scanner-cross-account-roles
+      Description: Dedicated cross-account deployment roles for perimeter-scanner.
+      PermissionModel: SERVICE_MANAGED
+      # Resource-property equivalent of `--call-as DELEGATED_ADMIN` - required
+      # because this stack is deployed from CICD, not the management account.
+      CallAs: DELEGATED_ADMIN
+      AutoDeployment:
+        Enabled: true
+        RetainStacksOnAccountRemoval: false
+      Capabilities:
+        - CAPABILITY_NAMED_IAM
+      # AWS::AccountId is the account this stack is deployed into - the CICD
+      # account, by design - so no static account string is needed.
+      Parameters:
+        - ParameterKey: CiCdAccountId
+          ParameterValue: !Ref AWS::AccountId
+        - ParameterKey: Environment
+          ParameterValue: devtest
+        - ParameterKey: PipelineArtifactBucketArn
+          ParameterValue: !Ref PipelineArtifactBucketArn
+        - ParameterKey: PipelineKmsKeyArn
+          ParameterValue: !Ref PipelineKmsKeyArn
+      OperationPreferences:
+        FailureTolerancePercentage: 0
+        MaxConcurrentPercentage: 100
+      StackInstancesGroup:
+        - Regions:
+            - ap-southeast-2
+          DeploymentTargets:
+            OrganizationalUnitIds:
+              - !Ref DevTestOrganizationalUnitId
+        - Regions:
+            - ap-southeast-2
+          DeploymentTargets:
+            OrganizationalUnitIds:
+              - !Ref ProdOrganizationalUnitId
+          ParameterOverrides:
+            - ParameterKey: Environment
+              ParameterValue: prod
+      TemplateBody: |
+        AWSTemplateFormatVersion: 2010-09-09
 
-  OutPerimeterScannerCfExecutionRole:
-    Description: CloudFormation execution role ARN.
-    Value: !GetAtt PerimeterScannerCfExecutionRole.Arn
-    Export:
-      Name: !Join ['-', ['PerimeterScanner-CfExecutionRoleArn', !Ref Environment]]
+        # Dedicated cross-account deployment roles for perimeter-scanner.
+        # Deployed into each target account by the perimeter-scanner-cross-account-roles
+        # StackSet, which is itself managed by the enclosing stack
+        # PerimeterScanner-StackSetCrossAccountRoles (this file). Change role
+        # definitions here and `aws cloudformation deploy` the enclosing stack -
+        # do not `update-stack-set` this body out of band.
+        #
+        # Why a dedicated set rather than the shared cross-account-role-{env}:
+        # those come from a StackSet owned by the peterwills.com project, which has
+        # diverged (its cf-execution-role lost ec2/dynamodb/sqs/ecr/events) and whose
+        # managed policy carries wildcards flagged by Security Hub IAM.21 / KMS.1.
+        # Resource names here are prefixed "perimeter-scanner-" so both sets coexist
+        # in the same accounts without collision.
 
-  OutPerimeterScannerCicdDeployPolicy:
-    Description: CICD deploy managed-policy ARN.
-    Value: !Ref PerimeterScannerCicdDeployPolicy
-    Export:
-      Name: !Join ['-', ['PerimeterScanner-CicdDeployPolicyArn', !Ref Environment]]
+        Parameters:
+          CiCdAccountId:
+            Description: Account ID of the CICD account whose CodePipeline assumes the action role.
+            Type: String
+            Default: '623056247312'
+            AllowedPattern: '\d{12}'
+            MinLength: 12
+            MaxLength: 12
+          Environment:
+            Description: Environment corresponding to this account (set per stack instance).
+            Type: String
+            AllowedValues: ['devtest', 'prod']
+            Default: 'devtest'
+          PipelineArtifactBucketArn:
+            Description: ARN (may contain a trailing wildcard) of the CICD pipeline's artifact bucket, which the action role reads packaged templates from.
+            Type: String
+            Default: 'arn:aws:s3:::perimeterscanner-app-pipelineoutputbucket-*'
+          PipelineKmsKeyArn:
+            Description: ARN of the KMS key the CICD pipeline encrypts its artifacts with; the action role needs Decrypt to read them.
+            Type: String
+            Default: 'arn:aws:kms:ap-southeast-2:623056247312:key/7f51caf1-758f-4fa2-9618-06dba104faa7'
+
+        Resources:
+
+          # ------------------------------------------------------------------
+          # Action role: assumed by the CICD account's CodePipeline to run the
+          # CloudFormation deploy action for PerimeterScanner-{DevTest,Prod}.
+          # Least-privilege by construction - no bare service:* action, no kms:*,
+          # resources scoped - so it clears Security Hub IAM.21 and KMS.1.
+          # ------------------------------------------------------------------
+          PerimeterScannerCrossAccountRole:
+            Type: AWS::IAM::Role
+            Properties:
+              RoleName: !Join ['-', ['perimeter-scanner-cross-account-role', !Ref Environment]]
+              AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                  - Effect: Allow
+                    Principal:
+                      AWS:
+                        - !Sub 'arn:aws:iam::${CiCdAccountId}:root'
+                    Action:
+                      - sts:AssumeRole
+
+          PerimeterScannerCicdDeployPolicy:
+            Type: AWS::IAM::ManagedPolicy
+            Properties:
+              ManagedPolicyName: perimeter-scanner-cicd-deploy-policy
+              Description: Least-privilege permissions for the CICD pipeline's cross-account CloudFormation deploy action.
+              Roles:
+                - !Ref PerimeterScannerCrossAccountRole
+              PolicyDocument:
+                Version: 2012-10-17
+                Statement:
+
+                  # CloudFormation stack operations, scoped to this project's stacks.
+                  - Sid: CfnStackOps
+                    Effect: Allow
+                    Action:
+                      - cloudformation:CreateStack
+                      - cloudformation:UpdateStack
+                      - cloudformation:DeleteStack
+                      - cloudformation:CreateChangeSet
+                      - cloudformation:DeleteChangeSet
+                      - cloudformation:ExecuteChangeSet
+                      - cloudformation:DescribeChangeSet
+                      - cloudformation:DescribeStacks
+                      - cloudformation:DescribeStackEvents
+                      - cloudformation:DescribeStackResource
+                      - cloudformation:DescribeStackResources
+                      - cloudformation:ListStackResources
+                      - cloudformation:GetTemplate
+                      - cloudformation:GetTemplateSummary
+                      - cloudformation:SetStackPolicy
+                      - cloudformation:UpdateTerminationProtection
+                    Resource:
+                      - !Sub 'arn:aws:cloudformation:*:${AWS::AccountId}:stack/PerimeterScanner-*/*'
+
+                  # Template validation has no resource-level support.
+                  - Sid: CfnValidate
+                    Effect: Allow
+                    Action:
+                      - cloudformation:ValidateTemplate
+                    Resource: '*'
+
+                  # Hand the CloudFormation execution role to the CloudFormation service.
+                  - Sid: PassExecutionRole
+                    Effect: Allow
+                    Action:
+                      - iam:PassRole
+                    Resource:
+                      - !GetAtt PerimeterScannerCfExecutionRole.Arn
+                    Condition:
+                      StringEquals:
+                        iam:PassedToService: cloudformation.amazonaws.com
+                  - Sid: GetExecutionRole
+                    Effect: Allow
+                    Action:
+                      - iam:GetRole
+                    Resource:
+                      - !GetAtt PerimeterScannerCfExecutionRole.Arn
+
+                  # Read the packaged template + build artifacts from the CICD account's
+                  # artifact bucket (cross-account).
+                  - Sid: ReadPipelineArtifacts
+                    Effect: Allow
+                    Action:
+                      - s3:GetObject
+                      - s3:GetObjectVersion
+                      - s3:GetBucketVersioning
+                      - s3:GetBucketLocation
+                      - s3:ListBucket
+                    Resource:
+                      - !Ref PipelineArtifactBucketArn
+                      - !Sub '${PipelineArtifactBucketArn}/*'
+
+                  # Decrypt those artifacts (bucket is SSE-KMS with the pipeline key).
+                  - Sid: DecryptPipelineArtifacts
+                    Effect: Allow
+                    Action:
+                      - kms:Decrypt
+                      - kms:GenerateDataKey
+                      - kms:DescribeKey
+                    Resource:
+                      - !Ref PipelineKmsKeyArn
+
+          # ------------------------------------------------------------------
+          # Execution role: assumed by the CloudFormation service to CRUD the
+          # resources in template.yaml. Inline policy, service:* action
+          # wildcards - only the CloudFormation service can assume it, and
+          # inline policies are out of scope for IAM.21. Restores
+          # ec2/dynamodb/sqs/ecr/events (which the shared, diverged role had
+          # lost) and adds ecs/scheduler/logs for the Phase 2 ECS re-platform.
+          # ------------------------------------------------------------------
+          PerimeterScannerCfExecutionRole:
+            Type: AWS::IAM::Role
+            Properties:
+              RoleName: !Join ['-', ['perimeter-scanner-cf-execution-role', !Ref Environment]]
+              AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                  - Effect: Allow
+                    Principal:
+                      Service:
+                        - cloudformation.amazonaws.com
+                    Action:
+                      - sts:AssumeRole
+              Policies:
+                - PolicyName: PerimeterScannerCfExecutionRolePolicy
+                  PolicyDocument:
+                    Version: 2012-10-17
+                    Statement:
+                      - Effect: Allow
+                        Action:
+                          - 'cloudformation:*'
+                          - 'dynamodb:*'
+                          - 'ec2:*'
+                          - 'ecr:*'
+                          - 'ecs:*'
+                          - 'events:*'
+                          - 'iam:*'
+                          - 'lambda:*'
+                          - 'logs:*'
+                          - 's3:*'
+                          - 'scheduler:*'
+                          - 'sqs:*'
+                        Resource: '*'
+
+        Outputs:
+          OutPerimeterScannerCrossAccountRole:
+            Description: Cross-account (CodePipeline action) role ARN.
+            Value: !GetAtt PerimeterScannerCrossAccountRole.Arn
+            Export:
+              Name: !Join ['-', ['PerimeterScanner-CrossAccountRoleArn', !Ref Environment]]
+
+          OutPerimeterScannerCfExecutionRole:
+            Description: CloudFormation execution role ARN.
+            Value: !GetAtt PerimeterScannerCfExecutionRole.Arn
+            Export:
+              Name: !Join ['-', ['PerimeterScanner-CfExecutionRoleArn', !Ref Environment]]
+
+          OutPerimeterScannerCicdDeployPolicy:
+            Description: CICD deploy managed-policy ARN.
+            Value: !Ref PerimeterScannerCicdDeployPolicy
+            Export:
+              Name: !Join ['-', ['PerimeterScanner-CicdDeployPolicyArn', !Ref Environment]]

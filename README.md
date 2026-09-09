@@ -32,44 +32,31 @@ pipeline assumes to deploy into the devtest and prod accounts:
 * `perimeter-scanner-cf-execution-role-<env>` — the CloudFormation service role that
   actually creates the app's resources.
 
-It is deployed **once**, as a *service-managed* CloudFormation StackSet, from the CICD
-account acting as a StackSets **delegated administrator**, auto-deploying to the
-Organizational Units that contain the devtest and prod accounts. (This is not deployed by
-the pipeline — it is a prerequisite of it.)
+`crossAccountRoles.yaml` is an **enclosing stack** (`PerimeterScanner-StackSetCrossAccountRoles`):
+it defines its own CloudFormation service role (`perimeter-scanner-stackset-cf-execution-role`)
+and an `AWS::CloudFormation::StackSet` resource (`perimeter-scanner-cross-account-roles`,
+`SERVICE_MANAGED`, `CallAs: DELEGATED_ADMIN`) whose inlined child template + `StackInstancesGroup`
+create the roles above in the devtest and prod OUs. Deployed **once**, from the CICD account
+acting as a StackSets delegated administrator. Not deployed by the pipeline — it is a
+prerequisite of it.
 
 ```bash
-CICD_ACCOUNT_ID=623056247312
-DEVTEST_OU_ID=ou-8me6-lphnkp1y   # OU containing the devtest workload account
-PROD_OU_ID=ou-8me6-u6ss8udg      # OU containing the prod workload account
-REGION=ap-southeast-2
+# First deploy only (the service role does not exist yet): omit --role-arn.
+aws cloudformation deploy --stack-name PerimeterScanner-StackSetCrossAccountRoles \
+  --template-file crossAccountRoles.yaml --capabilities CAPABILITY_NAMED_IAM \
+  --region ap-southeast-2
 
-aws cloudformation create-stack-set \
-  --stack-set-name perimeter-scanner-cross-account-roles \
-  --template-body file://crossAccountRoles.yaml \
-  --permission-model SERVICE_MANAGED \
-  --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --parameters ParameterKey=CiCdAccountId,ParameterValue=$CICD_ACCOUNT_ID \
-  --call-as DELEGATED_ADMIN --region $REGION
-
-# devtest instance (Environment defaults to devtest)
-aws cloudformation create-stack-instances \
-  --stack-set-name perimeter-scanner-cross-account-roles \
-  --deployment-targets OrganizationalUnitIds=$DEVTEST_OU_ID \
-  --regions $REGION --call-as DELEGATED_ADMIN
-
-# prod instance (override Environment=prod)
-aws cloudformation create-stack-instances \
-  --stack-set-name perimeter-scanner-cross-account-roles \
-  --deployment-targets OrganizationalUnitIds=$PROD_OU_ID \
-  --parameter-overrides ParameterKey=Environment,ParameterValue=prod \
-  --regions $REGION --call-as DELEGATED_ADMIN
+# Every deploy after that:
+aws cloudformation deploy --stack-name PerimeterScanner-StackSetCrossAccountRoles \
+  --template-file crossAccountRoles.yaml --capabilities CAPABILITY_NAMED_IAM \
+  --role-arn arn:aws:iam::623056247312:role/perimeter-scanner-stackset-cf-execution-role \
+  --region ap-southeast-2
 ```
 
-Subsequent changes: `aws cloudformation update-stack-set --stack-set-name
-perimeter-scanner-cross-account-roles --template-body file://crossAccountRoles.yaml
---capabilities CAPABILITY_NAMED_IAM --call-as DELEGATED_ADMIN --region $REGION`
-(the prod instance keeps its `Environment=prod` override).
+The OU IDs and pipeline artifact bucket / KMS key ARNs are template parameters with
+defaults; override with `--parameter-overrides` if they change. Updating the role
+definitions is a single `deploy` of this file — CloudFormation propagates the change to
+every target account via the StackSet.
 
 ### 2. Pipeline
 
