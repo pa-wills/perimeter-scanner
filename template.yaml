@@ -341,7 +341,7 @@ Resources:
       Handler: onArrivalOfHostsStreamEvent.handler
       MemorySize: 256
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 20
 
   onArrivalOfHostPortsStreamEvent:
@@ -363,7 +363,7 @@ Resources:
       Handler: onArrivalOfHostPortsStreamEvent.handler
       MemorySize: 256
       Role: !GetAtt onPopulateHostPortsOfInterestTableExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 20
 
   onArrivalOfResults:
@@ -392,7 +392,7 @@ Resources:
       Handler: onArrivalOfResults.handler
       MemorySize: 256
       Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 20
 
   onNmap:
@@ -451,7 +451,7 @@ Resources:
       Handler: onPopulateHostsOfInterestTable.handler
       MemorySize: 1024
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 60
 
   onPopulateNmapWorkQueue:
@@ -475,7 +475,7 @@ Resources:
       Handler: onPopulateNmapWorkQueue.handler
       MemorySize: 1024
       Role: !GetAtt onPopulateNmapWorkQueueExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 60
 
   onArrivalOfResultsExecutionRole:
@@ -744,7 +744,7 @@ Resources:
 
       MemorySize: 256
       Role: !GetAtt startEc2InstancesExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 20
 
   startEc2InstancesExecutionRole:

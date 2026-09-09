@@ -17,8 +17,9 @@ version: 0.2 # Turns out this matters - https://docs.aws.amazon.com/codebuild/la
 phases:
   install:
     runtime-versions:
-      docker: 20
-      python: 3.9
+      # Amazon Linux 2023 standard:5.0 ships a current Docker (no 'docker'
+      # runtime-version key) and Python 3.13, matching the Lambda runtime.
+      python: 3.13
   build:
     commands:
       # TODO: remove the ugly static refs.
