@@ -1,11 +1,14 @@
-FROM public.ecr.aws/lambda/python:3.10.2023.05.06.17-x86_64
+# nmap worker - a container-image Lambda (PackageType: Image).
+FROM public.ecr.aws/lambda/python:3.13
 
-RUN yum install git -y
-RUN pip install python-nmap
-RUN yum install nmap -y
+# Amazon Linux 2023 base: dnf, and a current nmap (the old AL2 base shipped
+# nmap 6.40 from 2013). onNmap.py runs a TCP-connect scan, which needs no
+# raw-socket capability, so it works unprivileged in Lambda.
+RUN dnf install -y nmap && dnf clean all
 
-# Copy function code
-COPY onNmap.py ${LAMBDA_TASK_ROOT}
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
-# Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
-CMD [ "onNmap.handler" ] 
+COPY onNmap.py ${LAMBDA_TASK_ROOT}/
+
+CMD [ "onNmap.handler" ]

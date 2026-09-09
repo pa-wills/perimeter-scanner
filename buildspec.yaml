@@ -1,43 +1,45 @@
-# Kudos to:
+# Build stage for the perimeter-scanner pipeline.
+#
+# 1. Build + push the two container images to the pipeline ECR repo:
+#      onnmap-<sha> / onnmap-latest   (the onNmap Lambda image)
+#      reconng-<sha> / reconng-latest (the recon-ng Fargate task image)
+#    The <sha> tag is exported as IMAGE_TAG so the deploy stages can pin
+#    onNmap's ImageUri to this exact build (see pipeline.yaml).
+# 2. sam build + sam package the rest of template.yaml.
 
-# https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
-# And... we're assuming Ubuntu.
+version: 0.2
 
-# Phase definitions: https://aws.amazon.com/blogs/apn/an-introduction-to-aws-codebuild/
-
-version: 0.2 # Turns out this matters - https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html#build-spec-ref-versions
-
-# I think there are essentially two challenges here, and I have combined them together, and i shouldn't have.
-# The first challenge is building the container for the lambda, pushing it to the ECR. The second - the familiar challenge - building, 
-# packaging and deploying the template. 
-
-# TODO: make CodeBuild check the provided repo for a latest image. If none exists - build it. Else - continue.
-# TODO: sam build, package as before, but inhibit the building of the container, which SAM wants to do by default.
+env:
+  exported-variables:
+    - IMAGE_TAG
 
 phases:
   install:
     runtime-versions:
-      # Amazon Linux 2023 standard:5.0 ships a current Docker (no 'docker'
-      # runtime-version key) and Python 3.13, matching the Lambda runtime.
       python: 3.13
   build:
     commands:
-      # TODO: remove the ugly static refs.
-      # TODO: make CodeBuild check the provided repo for a latest image. If none exists - build it. Else - continue.
-      # TODO: also, maybe make it conditional on something under onNmap changing.
+      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-manual}"
+      - REGISTRY="${ECR_REPO_URI%%/*}"
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
 
-      # Build the containers, tag, push to ECR.
-      - cd onNmap
-      - aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com # ap-southeast-2 and account specific. TODO.
-      - docker build -t $ECR_REPO_NAME .
-      - docker tag $ECR_REPO_NAME 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPO_NAME
-      - docker push $ECR_REPO_URI
+      # onNmap - container-image Lambda
+      - docker build -t "$ECR_REPO_URI:onnmap-$IMAGE_TAG" -t "$ECR_REPO_URI:onnmap-latest" onNmap
+      - docker push "$ECR_REPO_URI:onnmap-$IMAGE_TAG"
+      - docker push "$ECR_REPO_URI:onnmap-latest"
 
-      # Build and package everything else.
-      - cd ..
+      # reconng - ECS Fargate task image
+      - docker build -t "$ECR_REPO_URI:reconng-$IMAGE_TAG" -t "$ECR_REPO_URI:reconng-latest" reconng
+      - docker push "$ECR_REPO_URI:reconng-$IMAGE_TAG"
+      - docker push "$ECR_REPO_URI:reconng-latest"
+
+      # Package the SAM template (zip function code -> S3). onNmap's ImageUri is
+      # a CFN intrinsic referencing OnNmapImageTag, which sam passes through for
+      # the deploy stage to resolve.
       - sam build
-      - sam package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml --force-upload  --image-repository $ECR_REPO_URI
+      - sam package --template-file template.yaml --s3-bucket "$S3_BUCKET" --output-template-file packaged-template.yaml --force-upload --image-repository "$ECR_REPO_URI"
 
 artifacts:
   files:
-    - "**/*"
+    - packaged-template.yaml
+    - template.yaml

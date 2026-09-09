@@ -144,6 +144,7 @@ Resources:
       - Name: Build
         Actions:
         - Name: build
+          Namespace: BuildVars   # exposes IMAGE_TAG (git sha) from buildspec.yaml env.exported-variables
           InputArtifacts:
           - Name: "SourceArtifact"
           ActionTypeId:
@@ -172,7 +173,7 @@ Resources:
             StackName: PerimeterScanner-DevTest # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-devtest
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "KeyPairName": "pw-devtest", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}"}'
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "KeyPairName": "pw-devtest", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "OnNmapImageTag": "onnmap-#{BuildVars.IMAGE_TAG}"}'
             RoleArn: !Ref DevTestCfnRoleArn
             TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref DevTestCodePipelineRoleArn
@@ -193,7 +194,7 @@ Resources:
             StackName: PerimeterScanner-Prod # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-prod
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000", "KeyPairName": "pw-prod", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}"}'
+            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000", "KeyPairName": "pw-prod", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "OnNmapImageTag": "onnmap-#{BuildVars.IMAGE_TAG}"}'
             RoleArn: !Ref ProductionCfnRoleArn
             TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref ProductionCodePipelineRoleArn

@@ -1,0 +1,43 @@
+# recon-ng subdomain-enumeration worker - a one-shot ECS Fargate task image.
+# Replaces the EC2 WorkerInstance that used to run enumerateSubdomains.bash
+# from a @reboot cron.
+FROM public.ecr.aws/docker/library/python:3.12-slim
+
+ENV HOME=/opt/reconng \
+    PATH=/opt/recon-ng:$PATH \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# recon-ng ref to build from. The project tags releases rarely; pin this to a
+# commit SHA once a build is validated for full reproducibility.
+ARG RECONNG_REF=master
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      git ca-certificates build-essential libxml2-dev libxslt1-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch "${RECONNG_REF}" \
+      https://github.com/lanmaster53/recon-ng.git /opt/recon-ng \
+ && pip install --no-cache-dir -r /opt/recon-ng/REQUIREMENTS awscli
+
+# Run as non-root; recon-ng writes its db / workspaces / modules under $HOME/.recon-ng.
+RUN useradd --system --home-dir /opt/reconng --create-home reconng \
+ && chown -R reconng:reconng /opt/reconng /opt/recon-ng
+USER reconng
+
+# Bake in the marketplace modules the workflow uses, so runtime is deterministic
+# and does not depend on the marketplace being reachable.
+RUN recon-cli --no-version -C "marketplace refresh" \
+ && for m in recon/domains-hosts/brute_hosts \
+             recon/domains-hosts/hackertarget \
+             recon/domains-hosts/certificate_transparency \
+             recon/domains-hosts/bing_domain_web \
+             recon/domains-hosts/google_site_web \
+             recon/hosts-hosts/resolve \
+             reporting/csv ; do \
+      recon-cli --no-version -C "marketplace install $m" ; \
+    done
+
+COPY --chown=reconng:reconng enumerateSubdomains.bash /opt/reconng/enumerateSubdomains.bash
+ENTRYPOINT ["bash", "/opt/reconng/enumerateSubdomains.bash"]

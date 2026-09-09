@@ -42,6 +42,10 @@ Parameters:
   EcrRepoUri:
     Description: "Please provide the URI of the ECR repo in which the build containers are stored"
     Type: String
+  OnNmapImageTag:
+    Description: "Tag of the onNmap image in the build ECR repo. The pipeline sets this to onnmap-<git sha> so each build repoints the Lambda; a manual deploy can use the default."
+    Type: String
+    Default: "onnmap-latest"
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -97,7 +101,7 @@ Resources:
                   - ":"
                   - !Ref GitHubPersonalAccessToken
                   - "@github.com/pa-wills/perimeter-scanner.git"
-              - "cp perimeter-scanner/enumerateSubdomains.bash ."
+              - "cp perimeter-scanner/reconng/enumerateSubdomains.bash ."   # NB: EC2 worker is retired in #44; script now lives under reconng/
               - "# rm -rf perimeter-scanner"
 
               - "# Ensure that the script will run at boot"
@@ -447,10 +451,7 @@ Resources:
             Ref: ResultsTableHostPorts
           HOSTS_OF_INTEREST_TABLE:
             Ref: DerivedTableHostsOfInterest
-      ImageUri: !Join
-        - ''
-        - - !Ref EcrRepoUri
-          - ':latest'
+      ImageUri: !Join ['', [!Ref EcrRepoUri, ':', !Ref OnNmapImageTag]]
       PackageType: Image
       Role: !GetAtt onNmapExecutionRole.Arn
       Timeout: 120
@@ -472,8 +473,6 @@ Resources:
       Principal: "events.amazonaws.com"
       SourceArn: !GetAtt onNmapEventRule.Arn
 
-  # TODO: I'm going to need a custom resource to update the ImageURI to the latest item.
-  # E.g. aws lambda update-function-code --function-name  PerimeterScanner-DevTest-onNmap-XcpjqIJfhgM8 --image-uri 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest
 
   onPopulateHostsOfInterestTable:
     Type: AWS::Serverless::Function
