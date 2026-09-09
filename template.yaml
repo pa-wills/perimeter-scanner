@@ -312,6 +312,60 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: reconng
 
+  # Role EventBridge Scheduler assumes to run the task.
+  ReconngScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: reconngScheduleRunTask
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ecs:RunTask
+                Resource: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/${AWS::StackName}-reconng:*"
+                Condition:
+                  ArnEquals:
+                    ecs:cluster: !GetAtt ReconngCluster.Arn
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !GetAtt ReconngTaskRole.Arn
+                  - !GetAtt ReconngTaskExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+
+  # #43: replaces the startEc2Instance schedule. Reuses
+  # ScheduleStartInstancePeriodicityParameter (rate(2 hours) devtest /
+  # rate(24 hours) prod) so the parameter contract is unchanged.
+  ReconngSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression: !Ref ScheduleStartInstancePeriodicityParameter
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: !GetAtt ReconngCluster.Arn
+        RoleArn: !GetAtt ReconngScheduleRole.Arn
+        EcsParameters:
+          TaskDefinitionArn: !Ref ReconngTaskDefinition
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              Subnets: !Ref VpcSubnetIds
+              SecurityGroups:
+                - !Ref ReconngSecurityGroup
+              AssignPublicIp: ENABLED
+
   ResultsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -877,18 +931,16 @@ Resources:
 
   startEc2Instance:
     Type: AWS::Serverless::Function
+    # #43: the schedule that used to boot the EC2 worker now runs the Fargate
+    # task (ReconngSchedule). This function is kept trigger-less for rollback
+    # and is removed in #44.
     Properties:
       Handler: index.handler
       Description: 'The function that starts my EC2 worker instance.'
       Environment:
         Variables:
-          INSTANCE_ID: 
+          INSTANCE_ID:
             Ref: WorkerInstance
-      Events:
-        ProducerScheduleEvent:
-          Type: Schedule
-          Properties:
-            Schedule: !Ref ScheduleStartInstancePeriodicityParameter
       InlineCode: |
         import boto3
         import os
