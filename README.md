@@ -73,8 +73,22 @@ perimeter-scanner-cross-account-roles --template-body file://crossAccountRoles.y
 
 ### 2. Pipeline
 
-Deploy the *[pipeline.yaml](pipeline.yaml)* stack to the CICD account. Its
-`DevTest*`/`Production*` role-ARN parameters default to the roles created in step 1.
+Deploy the *[pipeline.yaml](pipeline.yaml)* stack (`PerimeterScanner-App`) to the CICD
+account. Its `DevTest*`/`Production*` role-ARN parameters default to the roles created in
+step 1.
+
+The template defines its own CloudFormation service role, `PipelineCfExecutionRole`
+(`perimeter-scanner-pipeline-cf-execution-role`), so the stack runs with a scoped role
+rather than the deploying principal (Security Hub CloudFormation.4). The very first deploy
+that creates this role must run without `--role-arn` (the role does not exist yet); **every
+deploy after that must pass it**:
+
+```bash
+aws cloudformation deploy --stack-name PerimeterScanner-App --template-file pipeline.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --role-arn arn:aws:iam::<cicd-account>:role/perimeter-scanner-pipeline-cf-execution-role \
+  --parameter-overrides ...
+```
 
 ### 3. Build
 

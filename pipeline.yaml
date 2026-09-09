@@ -473,3 +473,58 @@ Resources:
                   - 'kms:GenerateDataKey*'
                   - 'kms:DescribeKey'
                 Resource: !Ref PipelineEncryptionKey
+
+  # CloudFormation service role for THIS stack (PerimeterScanner-App), so it
+  # has an associated service role rather than running as the deploying
+  # principal (Security Hub CloudFormation.4). Same self-bootstrap pattern as
+  # pwdotcom's PwDotCom-Website/PipelineCfExecutionRole:
+  #   - the first deploy that introduces this resource runs ad hoc (no
+  #     --role-arn: the role doesn't exist yet);
+  #   - every deploy after passes
+  #       --role-arn arn:aws:iam::<cicd-acct>:role/perimeter-scanner-pipeline-cf-execution-role
+  # Scoped by service (the pipeline/build/custom-resource roles have no fixed
+  # RoleName, so their ARNs aren't knowable ahead of the first deploy); adds
+  # ecr:* for PipelineOutputRegistry, which the pwdotcom site pipeline lacks.
+  PipelineCfExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: perimeter-scanner-pipeline-cf-execution-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: PipelineStackExecutionPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'cloudformation:*'
+                  - 'codebuild:*'
+                  - 'codepipeline:*'
+                  - 'ecr:*'
+                  - 'iam:*'
+                  - 'lambda:*'
+                  - 's3:*'
+                Resource: '*'
+              # This stack has a stack-level notification ARN
+              # (arn:aws:sns:...:CloudformationStackEvents); once deploys run as
+              # this role instead of the caller, they need sns:Publish to it or
+              # every operation fails at the first event.
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:*'
+              # The GitHubPersonalAccessToken parameter is an
+              # AWS::SSM::Parameter::Value<String>; CloudFormation resolves it via
+              # the batch GetParameters API (even for a single name) on every
+              # stack operation, so the service role needs this or UpdateStack
+              # fails at validation with an ssm:GetParameters AccessDenied.
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameters'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/perimeter-scanner-app/GitHubPersonalAccessToken'
