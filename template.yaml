@@ -42,10 +42,16 @@ Parameters:
   EcrRepoUri:
     Description: "Please provide the URI of the ECR repo in which the build containers are stored"
     Type: String
-  OnNmapImageTag:
-    Description: "Tag of the onNmap image in the build ECR repo. The pipeline sets this to onnmap-<git sha> so each build repoints the Lambda; a manual deploy can use the default."
+  ImageTag:
+    Description: "Suffix for the build ECR image tags - onnmap-<value> and reconng-<value>. The pipeline sets this to the git SHA so each build repoints; a manual deploy can use 'latest'."
     Type: String
-    Default: "onnmap-latest"
+    Default: "latest"
+  VpcId:
+    Description: "VPC the recon-ng Fargate task's security group lives in (the default VPC)."
+    Type: AWS::EC2::VPC::Id
+  VpcSubnetIds:
+    Description: "Subnets the recon-ng Fargate task runs in (default-VPC public subnets)."
+    Type: List<AWS::EC2::Subnet::Id>
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -193,6 +199,118 @@ Resources:
             Resource: '*' # You'd want to constrain this to an Instance, but how to do so without a circular reference?
       Roles:
         - !Ref WorkerInstanceRole
+
+  # ------------------------------------------------------------------
+  # recon-ng Fargate worker (Phase 2). Stood up alongside WorkerInstance;
+  # the schedule is cut over to it in #43 and the EC2 worker removed in #44.
+  # ------------------------------------------------------------------
+  ReconngCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterSettings:
+        - Name: containerInsights
+          Value: disabled
+
+  ReconngLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+
+  ReconngSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: recon-ng Fargate task - egress only (no ingress).
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - Description: HTTPS (OSINT APIs, ECR, S3, AWS APIs)
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - Description: HTTP (some OSINT sources)
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - Description: DNS over TCP (resolve module)
+          IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+        - Description: DNS over UDP
+          IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+
+  ReconngTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ReconngTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: reconngTaskRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:AbortMultipartUpload
+                Resource: !Sub "${ResultsBucket.Arn}/*"
+              - Effect: Allow
+                Action: s3:GetBucketLocation
+                Resource: !GetAtt ResultsBucket.Arn
+
+  ReconngTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AWS::StackName}-reconng"
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: "512"
+      Memory: "1024"
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt ReconngTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ReconngTaskRole.Arn
+      ContainerDefinitions:
+        - Name: reconng
+          Image: !Join ['', [!Ref EcrRepoUri, ':reconng-', !Ref ImageTag]]
+          Essential: true
+          Environment:
+            - Name: PSCAN_DOMAINS_TO_ENUMERATE
+              Value: !Ref DomainsToEnumerate
+            - Name: PSCAN_RECONNG_WORKSPACE
+              Value: !Ref ReconngWorkspaceName
+            - Name: PSCAN_S3_BUCKET
+              Value: !Ref ResultsBucket
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ReconngLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: reconng
 
   ResultsBucket:
     Type: AWS::S3::Bucket
@@ -451,7 +569,7 @@ Resources:
             Ref: ResultsTableHostPorts
           HOSTS_OF_INTEREST_TABLE:
             Ref: DerivedTableHostsOfInterest
-      ImageUri: !Join ['', [!Ref EcrRepoUri, ':', !Ref OnNmapImageTag]]
+      ImageUri: !Join ['', [!Ref EcrRepoUri, ':onnmap-', !Ref ImageTag]]
       PackageType: Image
       Role: !GetAtt onNmapExecutionRole.Arn
       Timeout: 120

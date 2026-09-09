@@ -34,8 +34,8 @@ phases:
       - docker push "$ECR_REPO_URI:reconng-latest"
 
       # Package the SAM template (zip function code -> S3). onNmap's ImageUri is
-      # a CFN intrinsic referencing OnNmapImageTag, which sam passes through for
-      # the deploy stage to resolve.
+      # a CFN intrinsic referencing the ImageTag parameter, which sam passes
+      # through for the deploy stage to resolve.
       - sam build
       - sam package --template-file template.yaml --s3-bucket "$S3_BUCKET" --output-template-file packaged-template.yaml --force-upload --image-repository "$ECR_REPO_URI"
 
