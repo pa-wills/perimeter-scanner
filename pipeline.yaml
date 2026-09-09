@@ -551,3 +551,14 @@ Resources:
                 Action:
                   - 'ssm:GetParameters'
                 Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/perimeter-scanner-app/GitHubPersonalAccessToken'
+              # Updating the ProjectPipeline resource calls UpdatePipeline, which
+              # validates the CodeStarSourceConnection source action - that needs
+              # PassConnection on the connection. (codeconnections:* is the
+              # renamed service; grant both namespaces.)
+              - Effect: Allow
+                Action:
+                  - 'codestar-connections:PassConnection'
+                  - 'codestar-connections:UseConnection'
+                  - 'codeconnections:PassConnection'
+                  - 'codeconnections:UseConnection'
+                Resource: !Ref CodeStarSourceConnectionArn
