@@ -31,10 +31,6 @@ Parameters:
     Type: String
     Description: "The GitHub repo's branch the pipeline's source stage tracks."
     Default: "modernise-and-harden"
-  GitHubPersonalAccessToken:
-    Type: AWS::SSM::Parameter::Value<String>
-    Description: "The Param Store path for the PAT."
-    Default: "/perimeter-scanner-app/GitHubPersonalAccessToken" # Storing it here for the moment. TODO: use SecureString.
   ProductionCfnRoleArn:
     Type: String
     Description: "The Role that will be assumed by CloudFormation in order to deploy production resources. Created by the perimeter-scanner-cross-account-roles StackSet (crossAccountRoles.yaml)."
@@ -78,11 +74,10 @@ Metadata:
       - 
         Label: 
           default: "Source Stage"
-        Parameters: 
+        Parameters:
           - CodeStarSourceConnectionArn
           - GitHubFullRepoID
           - GitHubRepoBranch
-          - GitHubPersonalAccessToken
           - PipelineEncryptionKey
       - 
         Label: 
@@ -173,7 +168,7 @@ Resources:
             StackName: PerimeterScanner-DevTest # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-devtest
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "KeyPairName": "pw-devtest", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "ImageTag": "#{BuildVars.IMAGE_TAG}", "VpcId": "vpc-0e8f962fd09269d3c", "VpcSubnetIds": "subnet-09903165111f1b00a,subnet-0498bf9ae7b1cacc1,subnet-0819c79d9e9ebbd75"}'
+            ParameterOverrides: !Sub '{"ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "ImageTag": "#{BuildVars.IMAGE_TAG}", "VpcId": "vpc-0e8f962fd09269d3c", "VpcSubnetIds": "subnet-09903165111f1b00a,subnet-0498bf9ae7b1cacc1,subnet-0819c79d9e9ebbd75"}'
             RoleArn: !Ref DevTestCfnRoleArn
             TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref DevTestCodePipelineRoleArn
@@ -194,7 +189,7 @@ Resources:
             StackName: PerimeterScanner-Prod # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-prod
-            ParameterOverrides: !Sub '{"GitHubUsername": "pa-wills", "GitHubPersonalAccessToken": "${GitHubPersonalAccessToken}", "ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000", "KeyPairName": "pw-prod", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "ImageTag": "#{BuildVars.IMAGE_TAG}", "VpcId": "vpc-08accd2152bd2e9f6", "VpcSubnetIds": "subnet-0ace992d97adf6b86,subnet-02632e13b50ffe205,subnet-06732be4cf6bcc20e"}'
+            ParameterOverrides: !Sub '{"ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "ImageTag": "#{BuildVars.IMAGE_TAG}", "VpcId": "vpc-08accd2152bd2e9f6", "VpcSubnetIds": "subnet-0ace992d97adf6b86,subnet-02632e13b50ffe205,subnet-06732be4cf6bcc20e"}'
             RoleArn: !Ref ProductionCfnRoleArn
             TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref ProductionCodePipelineRoleArn
@@ -542,15 +537,6 @@ Resources:
                 Action:
                   - 'sns:Publish'
                 Resource: !Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:*'
-              # The GitHubPersonalAccessToken parameter is an
-              # AWS::SSM::Parameter::Value<String>; CloudFormation resolves it via
-              # the batch GetParameters API (even for a single name) on every
-              # stack operation, so the service role needs this or UpdateStack
-              # fails at validation with an ssm:GetParameters AccessDenied.
-              - Effect: Allow
-                Action:
-                  - 'ssm:GetParameters'
-                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/perimeter-scanner-app/GitHubPersonalAccessToken'
               # Updating the ProjectPipeline resource calls UpdatePipeline, which
               # validates the CodeStarSourceConnection source action - that needs
               # PassConnection on the connection. (codeconnections:* is the

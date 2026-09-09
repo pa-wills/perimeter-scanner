@@ -27,15 +27,6 @@ Parameters:
     Description: "Please provide a comma-delimited list of domains to enumerate"
     Default: ""
     Type: String
-  GitHubUsername:
-    Description: "Please provide the username for accessing the private repo"
-    Type: String    
-  GitHubPersonalAccessToken:
-    Description: "Please provide the PAT for accessing the private repo"
-    Type: String    
-  KeyPairName:
-    Description: "Please provide the name of the key pair corresponding to the EC2 worker"
-    Type: String
   EcrRepoArn:
     Description: "Please provide the ARN of the ECR repo in which the build containers are stored"
     Type: String
@@ -56,153 +47,18 @@ Parameters:
 Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups: 
-      - 
-        Label: 
+      -
+        Label:
           default: "recon-ng configuration"
-        Parameters: 
+        Parameters:
           - ReconngWorkspaceName
           - DomainsToEnumerate
-      - 
-        Label: 
-          default: "GitHub configuration"
-        Parameters: 
-          - GitHubUsername
-          - GitHubPersonalAccessToken
 
 Resources:
-  WorkerInstance:
-    Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT5M
-    DependsOn: WorkerInstanceProfile # If the IAM objects aren't there, then the aws cli invocations in the UserData won't be authorised.
-    Properties:
-      ImageId: "ami-0d147324c76e8210a"
-      IamInstanceProfile: !Ref WorkerInstanceProfile
-      InstanceType: "t2.micro"
-      KeyName: !Ref KeyPairName
-      SecurityGroupIds: 
-        - !Ref WorkerInstanceSecurityGroup
-      SubnetId: ""
-      UserData:
-        Fn::Base64:
-          Fn::Join:
-            - "\n"
-            - - "#!/bin/bash"
-              - "sudo yum update -y"
-              - "sudo yum install git pip nmap -y"
-              - "sudo dnf install cronie cronie-anacron -y" # Amazon Linux 2023 - doesn't have cron installed. Weird.
-
-              - "# recon-ng installation"
-              - "cd /home/ec2-user"
-              - "git clone https://github.com/lanmaster53/recon-ng.git"
-              - "pip3 install -r recon-ng/REQUIREMENTS"
-              - "echo export PATH=\"$PATH:/home/ec2-user/recon-ng/\" >> .bash_profile"
-
-              - "# Clone the repo"
-              - Fn::Join:
-                - ""
-                - - "git clone https://"
-                  - !Ref GitHubUsername
-                  - ":"
-                  - !Ref GitHubPersonalAccessToken
-                  - "@github.com/pa-wills/perimeter-scanner.git"
-              - "cp perimeter-scanner/reconng/enumerateSubdomains.bash ."   # NB: EC2 worker is retired in #44; script now lives under reconng/
-              - "# rm -rf perimeter-scanner"
-
-              - "# Ensure that the script will run at boot"
-              - "echo \"@reboot bash /home/ec2-user/enumerateSubdomains.bash &> /home/ec2-user/enumerate.log\" | sudo crontab -u ec2-user -"
-
-              - "# Env vars necessary for the code on the EC2 instance to do its job."
-              - Fn::Join:
-                - ""
-                - - "echo export PSCAN_DOMAINS_TO_ENUMERATE=\""
-                  - !Ref DomainsToEnumerate
-                  - "\" >> .bash_profile"
-              - Fn::Join:
-                - ""
-                - - "echo export PSCAN_RECONNG_WORKSPACE=\""
-                  - !Ref ReconngWorkspaceName
-                  - "\" >> .bash_profile"
-              - Fn::Join:
-                - ""
-                - - "echo export PSCAN_S3_BUCKET=\""
-                  - !Ref ResultsBucket
-                  - "\" >> .bash_profile"
-
-              - "# Signal stack that creation has successfully completed."
-              - Fn::Join:
-                - ""
-                - - "/opt/aws/bin/cfn-signal -e $? --stack "
-                  - !Ref 'AWS::StackName'
-                  - " --resource WorkerInstance --region "
-                  - !Ref 'AWS::Region'
-
-              - "# Require use of IMDSv2"
-              - "# Annoyingly - I can't set this staticly using the CFN template. Doing it after the event from the command line feels hacky."
-              - "TOKEN=`curl -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\"`"
-              - "INSTANCEID=\"$(curl http://169.254.169.254/latest/meta-data/instance-id -H \"X-aws-ec2-metadata-token: $TOKEN\")\"" # You can't use a !Ref without causing a circular reference.
-              - "aws ec2 modify-instance-metadata-options --instance-id $INSTANCEID --http-tokens required --http-endpoint enabled --http-put-response-hop-limit 1 region —ap-southeast-2"
-
-              - "sudo chmod 755 /home/ec2-user"
-
-              - "# Stop the instance (we don't run enumeration on the launch boot)."
-              - "aws ec2 stop-instances --instance-ids $INSTANCEID --region ap-southeast-2"
-
-  WorkerInstanceSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: Enable ..... nothing.
-
-  WorkerInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
-    Properties: 
-      Roles:
-        - !Ref WorkerInstanceRole
-
-  WorkerInstanceRole:
-    Type: "AWS::IAM::Role"
-    Properties: 
-      AssumeRolePolicyDocument: 
-        Version: "2012-10-17"
-        Statement: 
-          - 
-            Effect: "Allow"
-            Principal:
-              Service:
-                - "ec2.amazonaws.com"
-            Action: 
-              - "sts:AssumeRole"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-      Path: "/"
-
-  WorkerInstanceRolePolicy:
-    Type: 'AWS::IAM::Policy'
-    Properties:
-      PolicyName: policyForTheEc2Instance
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action: 
-              - 's3:PutObject'
-            Resource: !Join
-              - ''
-              - - !GetAtt ResultsBucket.Arn
-                - /*
-          - Effect: Allow
-            Action: 
-              - 'ec2:StopInstances'
-              - 'ec2:DescribeInstances'
-              - 'ec2:ModifyInstanceMetadataOptions'
-            Resource: '*' # You'd want to constrain this to an Instance, but how to do so without a circular reference?
-      Roles:
-        - !Ref WorkerInstanceRole
-
   # ------------------------------------------------------------------
-  # recon-ng Fargate worker (Phase 2). Stood up alongside WorkerInstance;
-  # the schedule is cut over to it in #43 and the EC2 worker removed in #44.
+  # recon-ng Fargate worker. Replaced the EC2 WorkerInstance + the
+  # startEc2Instance boot Lambda (removed in #44); ReconngSchedule below
+  # replaced their EventBridge schedule.
   # ------------------------------------------------------------------
   ReconngCluster:
     Type: AWS::ECS::Cluster
@@ -343,9 +199,8 @@ Resources:
                   StringEquals:
                     iam:PassedToService: ecs-tasks.amazonaws.com
 
-  # #43: replaces the startEc2Instance schedule. Reuses
-  # ScheduleStartInstancePeriodicityParameter (rate(2 hours) devtest /
-  # rate(24 hours) prod) so the parameter contract is unchanged.
+  # Reuses ScheduleStartInstancePeriodicityParameter (rate(2 hours) devtest
+  # / rate(24 hours) prod) - the parameter that used to drive startEc2Instance.
   ReconngSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
@@ -929,64 +784,4 @@ Resources:
       Roles:
         - !Ref onPopulateHostPortsOfInterestTableExecutionRole
 
-  startEc2Instance:
-    Type: AWS::Serverless::Function
-    # #43: the schedule that used to boot the EC2 worker now runs the Fargate
-    # task (ReconngSchedule). This function is kept trigger-less for rollback
-    # and is removed in #44.
-    Properties:
-      Handler: index.handler
-      Description: 'The function that starts my EC2 worker instance.'
-      Environment:
-        Variables:
-          INSTANCE_ID:
-            Ref: WorkerInstance
-      InlineCode: |
-        import boto3
-        import os
-        
-        region = 'ap-southeast-2'
-        ec2 = boto3.client('ec2', region_name=region)
-
-        def handler(event, context):
-          ec2.start_instances(InstanceIds = [os.environ.get('INSTANCE_ID')])
-
-      MemorySize: 256
-      Role: !GetAtt startEc2InstancesExecutionRole.Arn
-      Runtime: python3.13
-      Timeout: 20
-
-  startEc2InstancesExecutionRole:
-    Type: "AWS::IAM::Role"
-    Properties: 
-      AssumeRolePolicyDocument: 
-        Version: "2012-10-17"
-        Statement: 
-          - 
-            Effect: "Allow"
-            Principal: 
-              Service: 
-                - "lambda.amazonaws.com"
-            Action: 
-              - "sts:AssumeRole"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
-      Path: "/"
-
-  startEc2InstancesExecutionRolePolicy:
-    Type: 'AWS::IAM::Policy'
-    Properties:
-      PolicyName: policyToAllowEc2InstancesToStart
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action: 'ec2:StartInstances'
-            Resource: !Join
-              - ''
-              - - 'arn:aws:ec2:ap-southeast-2:*:instance/'
-                - !Ref WorkerInstance
-
-      Roles:
-        - !Ref startEc2InstancesExecutionRole
 

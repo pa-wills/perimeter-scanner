@@ -13,12 +13,22 @@ AWS helpfully [explains](https://docs.aws.amazon.com/whitepapers/latest/organizi
 The pipeline itself comprises a source stage in Github, a build step followed by a deployment to a non-production (I refer to it herein as *devtest*) environment, and finally: deployment to production. 
 
 ## The App
-Fundamentally: recon-ng with a custom workflow run from the shell of a EC2 Instance created for the task. I could not figure out how to make recon-ng serverless, and so I've done what I hope is the next best thing:
+recon-ng with a custom workflow, packaged as a container image ([reconng/](reconng/)) and
+run as a one-shot **ECS Fargate task**:
 
-* An EC2 Instance which is configured to launch, install recon-ng, clone this rpo, set up cron, set up some environment variables, then stop.
-* A scheduled eventbridge task that invokes a Lambda, which itself starts the previously launched EC2 Instance. This act causes the enumeration script to run, resulting in a CSV file which is copied to S3 and then deleted locally. That EC2 Instance is then stopped (because I am cheap / frugal).
-* S3 event notifications then cause another Lambda to invoke, which parses the file, loads contents into a DynamoDB table, then deletes the CSV file.
-* A secondary DynamoDB table that summarises when hosts were first detected and most recently detected.
+* An EventBridge Scheduler schedule (`ReconngSchedule`, periodicity per environment) runs
+  the Fargate task. The container runs `enumerateSubdomains.bash` — the recon-ng workflow —
+  and copies the resulting CSV to S3; the task then exits.
+* An S3 event notification invokes `onArrivalOfResults`, which parses the CSV into the
+  `ResultsTableHosts` DynamoDB table and deletes the object.
+* DynamoDB Streams on `ResultsTableHosts` / `ResultsTableHostPorts` drive functions that
+  maintain the derived "of interest" tables (first-seen / last-seen per host and per
+  host:port).
+* A separate nmap worker (`onNmap`, a container-image Lambda) port-scans discovered hosts
+  from an SQS work queue.
+
+(Earlier releases ran the recon-ng workflow from a `@reboot` cron on a scheduled-boot EC2
+instance; that was replaced by the Fargate task.)
 
 ## Instructions
 
@@ -79,14 +89,18 @@ aws cloudformation deploy --stack-name PerimeterScanner-App --template-file pipe
 
 ### 3. Build
 
-The CodePipeline runs automatically on a push to its source branch, producing a built and
-deployed application.
-
+The CodePipeline runs automatically on a push to its source branch: it builds the `onNmap`
+and `reconng` container images (tagged `<name>-<git sha>` and `<name>-latest`), packages
+`template.yaml`, and deploys to devtest then (on manual transition) production.
 
 ## Assumptions / Parameters
-OK, so despite my best efforts the application is not perfectly self-contained. I.e. there are some items that need to be set up prior to deploying the pipeline stack.
+Some items must be set up before deploying the pipeline stack:
 
-* The Pipeline's source stage connects to Github through a Codestar Connection. This needs to instantiated, and its ARN given as a parameter.
-* Since this repo is currently *private*, it cannot be accessed without authentication. Loathe as I am to store secrets in repos of any kind - I have placed the require [Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) into the Systems Manager Paramater Store.
+* The pipeline's source stage connects to GitHub through an AWS CodeConnections
+  (CodeStar) connection; its ARN is a parameter. This is the only GitHub credential the
+  system needs — the recon-ng workflow is baked into the `reconng` image at build time, so
+  there is no runtime `git clone` and no Personal Access Token.
+* The recon-ng workspace name and the comma-separated list of domains to enumerate are
+  parameters, passed through from the pipeline.
 
 
