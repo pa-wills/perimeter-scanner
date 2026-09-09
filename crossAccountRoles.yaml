@@ -37,7 +37,7 @@ Parameters:
   PipelineKmsKeyArn:
     Description: ARN of the KMS key the CICD pipeline encrypts its artifacts with; the action role needs Decrypt to read them.
     Type: String
-    Default: 'arn:aws:kms:ap-southeast-2:623056247312:key/40255820-b100-4be1-b3fa-9706ccdc2588'
+    Default: 'arn:aws:kms:ap-southeast-2:623056247312:key/7f51caf1-758f-4fa2-9618-06dba104faa7'
 
 Resources:
 

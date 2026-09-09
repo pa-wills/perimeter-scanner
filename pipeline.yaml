@@ -29,8 +29,8 @@ Parameters:
     Default: "pa-wills/perimeter-scanner"
   GitHubRepoBranch:
     Type: String
-    Description: "The GitHub repo's branch."
-    Default: "dev"
+    Description: "The GitHub repo's branch the pipeline's source stage tracks."
+    Default: "modernise-and-harden"
   GitHubPersonalAccessToken:
     Type: AWS::SSM::Parameter::Value<String>
     Description: "The Param Store path for the PAT."
@@ -54,7 +54,7 @@ Parameters:
   PipelineEncryptionKey:
     Type: String
     Description: "The ARN of the KMS key to be used to encrypt CodePipeline artifacts."
-    Default: "arn:aws:kms:ap-southeast-2:623056247312:key/40255820-b100-4be1-b3fa-9706ccdc2588"
+    Default: "arn:aws:kms:ap-southeast-2:623056247312:key/7f51caf1-758f-4fa2-9618-06dba104faa7" # alias/CodePipelineArtifactEncryptionKey-norotate; the previous key (40255820) was scheduled for deletion.
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -405,6 +405,17 @@ Resources:
                   - 'iam:*'
                   - 's3:*'
                 Resource: '*'
+              # Read/write SSE-KMS artifacts in the pipeline bucket. Needed
+              # explicitly now that the artifact key's policy delegates to
+              # IAM (Principal: account root) instead of granting Principal: "*".
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:Encrypt'
+                  - 'kms:ReEncrypt*'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:DescribeKey'
+                Resource: !Ref PipelineEncryptionKey
 
   CodePipelineServiceRole:
     Type: 'AWS::IAM::Role'
@@ -452,3 +463,13 @@ Resources:
                   - 's3:*'
                   - 'cloudformation:*'
                 Resource: '*'
+              # Encrypt/decrypt SSE-KMS artifacts in the pipeline bucket
+              # (artifact key policy now delegates to IAM rather than Principal: "*").
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:Encrypt'
+                  - 'kms:ReEncrypt*'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:DescribeKey'
+                Resource: !Ref PipelineEncryptionKey
