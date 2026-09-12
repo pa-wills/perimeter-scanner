@@ -168,7 +168,7 @@ Resources:
             StackName: PerimeterScanner-DevTest # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-devtest
-            ParameterOverrides: !Sub '{"ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "ImageTag": "#{BuildVars.IMAGE_TAG}", "VpcId": "vpc-0e8f962fd09269d3c", "VpcSubnetIds": "subnet-09903165111f1b00a,subnet-0498bf9ae7b1cacc1,subnet-0819c79d9e9ebbd75"}'
+            ParameterOverrides: !Sub '{"ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(2 hours)", "DynamoDbRetentionPeriod": "86400", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "OnNmapImageDigest": "#{BuildVars.ONNMAP_DIGEST}", "ReconngImageDigest": "#{BuildVars.RECONNG_DIGEST}", "VpcId": "vpc-0e8f962fd09269d3c", "VpcSubnetIds": "subnet-09903165111f1b00a,subnet-0498bf9ae7b1cacc1,subnet-0819c79d9e9ebbd75"}'
             RoleArn: !Ref DevTestCfnRoleArn
             TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref DevTestCodePipelineRoleArn
@@ -189,7 +189,7 @@ Resources:
             StackName: PerimeterScanner-Prod # Unfortunately this has to be set statically. Portability?
             Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
             ChangeSetName: pipeline-changeset-prod
-            ParameterOverrides: !Sub '{"ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "ImageTag": "#{BuildVars.IMAGE_TAG}", "VpcId": "vpc-08accd2152bd2e9f6", "VpcSubnetIds": "subnet-0ace992d97adf6b86,subnet-02632e13b50ffe205,subnet-06732be4cf6bcc20e"}'
+            ParameterOverrides: !Sub '{"ReconngWorkspaceName": "${ReconngWorkspaceName}", "DomainsToEnumerate": "${DomainsToEnumerate}", "ScheduleStartInstancePeriodicityParameter": "rate(24 hours)", "DynamoDbRetentionPeriod": "315360000", "EcrRepoArn": "${PipelineOutputRegistry.Arn}", "EcrRepoUri": "${PipelineOutputRegistry.RepositoryUri}", "OnNmapImageDigest": "#{BuildVars.ONNMAP_DIGEST}", "ReconngImageDigest": "#{BuildVars.RECONNG_DIGEST}", "VpcId": "vpc-08accd2152bd2e9f6", "VpcSubnetIds": "subnet-0ace992d97adf6b86,subnet-02632e13b50ffe205,subnet-06732be4cf6bcc20e"}'
             RoleArn: !Ref ProductionCfnRoleArn
             TemplatePath: "BuildArtifact::packaged-template.yaml"
           RoleArn: !Ref ProductionCodePipelineRoleArn
@@ -246,6 +246,10 @@ Resources:
   PipelineOutputRegistry:
     Type: AWS::ECR::Repository
     Properties:
+      ImageTagMutability: IMMUTABLE # ECR.2. Deploys pin by digest anyway (see OnNmapImageDigest /
+        # ReconngImageDigest below) - this closes the other half of the gap: it stops a later
+        # push from silently repointing a tag something else still keys off, e.g. by name in
+        # the ECR console/CLI during manual troubleshooting. See #38.
       RepositoryPolicyText:
         Version: "2012-10-17"
         Statement:

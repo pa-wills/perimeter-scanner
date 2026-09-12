@@ -33,10 +33,12 @@ Parameters:
   EcrRepoUri:
     Description: "Please provide the URI of the ECR repo in which the build containers are stored"
     Type: String
-  ImageTag:
-    Description: "Suffix for the build ECR image tags - onnmap-<value> and reconng-<value>. The pipeline sets this to the git SHA so each build repoints; a manual deploy can use 'latest'."
+  OnNmapImageDigest:
+    Description: "sha256 digest of the onNmap image (e.g. sha256:abcd...) - CloudFormation pins ImageUri to this digest, not a tag, so the deployed function can't be repointed by a later push to the same tag. The pipeline resolves this from ECR right after CodeBuild pushes the image."
     Type: String
-    Default: "latest"
+  ReconngImageDigest:
+    Description: "sha256 digest of the reconng image (e.g. sha256:abcd...) - pins the ECS task definition's image by digest for the same reason as OnNmapImageDigest."
+    Type: String
   VpcId:
     Description: "VPC the recon-ng Fargate task's security group lives in (the default VPC)."
     Type: AWS::EC2::VPC::Id
@@ -152,7 +154,7 @@ Resources:
       TaskRoleArn: !GetAtt ReconngTaskRole.Arn
       ContainerDefinitions:
         - Name: reconng
-          Image: !Join ['', [!Ref EcrRepoUri, ':reconng-', !Ref ImageTag]]
+          Image: !Join ['', [!Ref EcrRepoUri, '@', !Ref ReconngImageDigest]]
           Essential: true
           Environment:
             - Name: PSCAN_DOMAINS_TO_ENUMERATE
@@ -478,7 +480,7 @@ Resources:
             Ref: ResultsTableHostPorts
           HOSTS_OF_INTEREST_TABLE:
             Ref: DerivedTableHostsOfInterest
-      ImageUri: !Join ['', [!Ref EcrRepoUri, ':onnmap-', !Ref ImageTag]]
+      ImageUri: !Join ['', [!Ref EcrRepoUri, '@', !Ref OnNmapImageDigest]]
       PackageType: Image
       Role: !GetAtt onNmapExecutionRole.Arn
       Timeout: 120

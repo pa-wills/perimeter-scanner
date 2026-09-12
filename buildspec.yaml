@@ -1,10 +1,11 @@
 # Build stage for the perimeter-scanner pipeline.
 #
-# 1. Build + push the two container images to the pipeline ECR repo:
-#      onnmap-<sha> / onnmap-latest   (the onNmap Lambda image)
-#      reconng-<sha> / reconng-latest (the recon-ng Fargate task image)
-#    The <sha> tag is exported as IMAGE_TAG so the deploy stages can pin
-#    onNmap's ImageUri to this exact build (see pipeline.yaml).
+# 1. Build + push the two container images to the pipeline ECR repo (which is
+#    IMAGE_TAG-MUTABILITY: IMMUTABLE - see pipeline.yaml), tagged onnmap-<tag> /
+#    reconng-<tag> for human traceability only. Right after each push, resolve the
+#    digest ECR actually assigned and export it - the deploy stages pin
+#    OnNmapImageDigest/ReconngImageDigest to that digest, not the tag, so a later
+#    push (to this tag or any other) can never repoint what's already deployed. See #38.
 # 2. sam build + sam package the rest of template.yaml.
 
 version: 0.2
@@ -12,6 +13,8 @@ version: 0.2
 env:
   exported-variables:
     - IMAGE_TAG
+    - ONNMAP_DIGEST
+    - RECONNG_DIGEST
 
 phases:
   install:
@@ -19,23 +22,26 @@ phases:
       python: 3.13
   build:
     commands:
-      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-manual}"
+      # Build number suffix so a pipeline retry that rebuilds the same commit can't
+      # collide with an already-pushed immutable tag.
+      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-manual}-b${CODEBUILD_BUILD_NUMBER}"
       - REGISTRY="${ECR_REPO_URI%%/*}"
       - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
 
       # onNmap - container-image Lambda
-      - docker build -t "$ECR_REPO_URI:onnmap-$IMAGE_TAG" -t "$ECR_REPO_URI:onnmap-latest" onNmap
+      - docker build -t "$ECR_REPO_URI:onnmap-$IMAGE_TAG" onNmap
       - docker push "$ECR_REPO_URI:onnmap-$IMAGE_TAG"
-      - docker push "$ECR_REPO_URI:onnmap-latest"
+      - ONNMAP_DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPO_NAME" --image-ids imageTag="onnmap-$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
 
       # reconng - ECS Fargate task image
-      - docker build -t "$ECR_REPO_URI:reconng-$IMAGE_TAG" -t "$ECR_REPO_URI:reconng-latest" reconng
+      - docker build -t "$ECR_REPO_URI:reconng-$IMAGE_TAG" reconng
       - docker push "$ECR_REPO_URI:reconng-$IMAGE_TAG"
-      - docker push "$ECR_REPO_URI:reconng-latest"
+      - RECONNG_DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPO_NAME" --image-ids imageTag="reconng-$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
 
-      # Package the SAM template (zip function code -> S3). onNmap's ImageUri is
-      # a CFN intrinsic referencing the ImageTag parameter, which sam passes
-      # through for the deploy stage to resolve.
+      # Package the SAM template (zip function code -> S3). onNmap's ImageUri and the
+      # reconng task definition's Image are CFN intrinsics referencing the
+      # OnNmapImageDigest/ReconngImageDigest parameters, which sam passes through for
+      # the deploy stage to resolve via ParameterOverrides (see pipeline.yaml).
       - sam build
       - sam package --template-file template.yaml --s3-bucket "$S3_BUCKET" --output-template-file packaged-template.yaml --force-upload --image-repository "$ECR_REPO_URI"
 
