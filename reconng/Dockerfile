@@ -39,5 +39,16 @@ RUN recon-cli --no-version -C "marketplace refresh" \
       recon-cli --no-version -C "marketplace install $m" ; \
     done
 
+# Preserve the build-time-populated $HOME/.recon-ng (modules, marketplace registry,
+# keys.db) at a separate path. The runtime task definition mounts a fresh, empty,
+# writable tmpfs at $HOME/.recon-ng (needed for ECS.5 - read-only root filesystem -
+# since recon-ng writes its keys/workspace DBs there); that mount would otherwise
+# shadow everything baked in above. enumerateSubdomains.bash re-seeds the tmpfs from
+# this copy on every container start, before running anything.
+USER root
+RUN cp -a /opt/reconng/.recon-ng /opt/reconng-seed \
+ && chown -R reconng:reconng /opt/reconng-seed
+USER reconng
+
 COPY --chown=reconng:reconng enumerateSubdomains.bash /opt/reconng/enumerateSubdomains.bash
 ENTRYPOINT ["bash", "/opt/reconng/enumerateSubdomains.bash"]

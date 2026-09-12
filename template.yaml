@@ -156,6 +156,21 @@ Resources:
         - Name: reconng
           Image: !Join ['', [!Ref EcrRepoUri, '@', !Ref ReconngImageDigest]]
           Essential: true
+          ReadonlyRootFilesystem: true # ECS.5
+          User: reconng # ECS.20 - non-root; matches the image's own USER
+          LinuxParameters:
+            Tmpfs:
+              # recon-ng writes its keys/workspace DBs under $HOME/.recon-ng at
+              # runtime; enumerateSubdomains.bash re-seeds this from the build-time
+              # copy on every start (see reconng/Dockerfile). ECS's tmpfs defaults to
+              # mode=755 root-owned, not the usual 1777 - must be set explicitly or
+              # the non-root user can't write to it.
+              - ContainerPath: /opt/reconng/.recon-ng
+                Size: 128
+                MountOptions: ["mode=1777"]
+              - ContainerPath: /tmp
+                Size: 64
+                MountOptions: ["mode=1777"]
           Environment:
             - Name: PSCAN_DOMAINS_TO_ENUMERATE
               Value: !Ref DomainsToEnumerate

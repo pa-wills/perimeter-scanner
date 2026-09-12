@@ -13,6 +13,14 @@ set -euo pipefail
 
 : "${PSCAN_DOMAINS_TO_ENUMERATE:?}" "${PSCAN_RECONNG_WORKSPACE:?}" "${PSCAN_S3_BUCKET:?}"
 
+# $HOME/.recon-ng is a fresh, empty, writable tmpfs at container start (the task
+# definition's root filesystem is read-only - ECS.5 - and recon-ng needs to write its
+# keys/workspace DBs there). Re-seed it from the build-time copy (modules, marketplace
+# registry, keys.db - see reconng/Dockerfile) before running anything, or every module
+# load fails with "Invalid module name".
+mkdir -p "$HOME/.recon-ng"
+cp -a /opt/reconng-seed/. "$HOME/.recon-ng/"
+
 WS="$PSCAN_RECONNG_WORKSPACE"
 # split on comma; strip spaces/tabs only (NOT the newlines that separate the domains)
 mapfile -t domains < <(tr ',' '\n' <<<"$PSCAN_DOMAINS_TO_ENUMERATE" | tr -d ' \t' | grep .)
