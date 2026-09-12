@@ -19,7 +19,11 @@ set -euo pipefail
 # registry, keys.db - see reconng/Dockerfile) before running anything, or every module
 # load fails with "Invalid module name".
 mkdir -p "$HOME/.recon-ng"
-cp -a /opt/reconng-seed/. "$HOME/.recon-ng/"
+# Plain recursive copy, not `cp -a`: `-a` tries to preserve the destination
+# directory's own timestamp, which fails on a tmpfs mount root ("Operation not
+# permitted") and aborts the script under `set -e`. Attribute preservation isn't
+# needed for a throwaway runtime copy anyway.
+cp -r /opt/reconng-seed/. "$HOME/.recon-ng/"
 
 WS="$PSCAN_RECONNG_WORKSPACE"
 # split on comma; strip spaces/tabs only (NOT the newlines that separate the domains)
