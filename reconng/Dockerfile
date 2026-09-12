@@ -19,6 +19,7 @@ RUN apt-get update \
 
 RUN git clone --depth 1 --branch "${RECONNG_REF}" \
       https://github.com/lanmaster53/recon-ng.git /opt/recon-ng \
+ && pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r /opt/recon-ng/REQUIREMENTS awscli
 
 # Run as non-root; recon-ng writes its db / workspaces / modules under $HOME/.recon-ng.

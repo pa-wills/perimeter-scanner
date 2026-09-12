@@ -28,13 +28,15 @@ phases:
       - REGISTRY="${ECR_REPO_URI%%/*}"
       - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
 
-      # onNmap - container-image Lambda
-      - docker build -t "$ECR_REPO_URI:onnmap-$IMAGE_TAG" onNmap
+      # onNmap - container-image Lambda. --pull: always start from the current
+      # upstream base image, not a stale one CodeBuild's Docker cache happens to
+      # have locally - base-image OS packages get security patches over time.
+      - docker build --pull -t "$ECR_REPO_URI:onnmap-$IMAGE_TAG" onNmap
       - docker push "$ECR_REPO_URI:onnmap-$IMAGE_TAG"
       - ONNMAP_DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPO_NAME" --image-ids imageTag="onnmap-$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
 
       # reconng - ECS Fargate task image
-      - docker build -t "$ECR_REPO_URI:reconng-$IMAGE_TAG" reconng
+      - docker build --pull -t "$ECR_REPO_URI:reconng-$IMAGE_TAG" reconng
       - docker push "$ECR_REPO_URI:reconng-$IMAGE_TAG"
       - RECONNG_DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPO_NAME" --image-ids imageTag="reconng-$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
 
