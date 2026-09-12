@@ -1,6 +1,14 @@
 # recon-ng subdomain-enumeration worker - a one-shot ECS Fargate task image.
 # Replaces the EC2 WorkerInstance that used to run enumerateSubdomains.bash
 # from a @reboot cron.
+#
+# Inspector (ECR image scanning) reports ~21 findings (7 HIGH) as of 2026-09-12, all
+# in this base image's own bundled OS libraries (libxml2, pcre2, sqlite3, gzip, zlib,
+# nghttp2) - none in recon-ng's own REQUIREMENTS or awscli. (pip itself had 6 more,
+# fixed below by upgrading it.) Accepted risk: nothing here installs or controls those
+# packages directly, and several have no upstream fix published yet at all. `--pull`
+# in buildspec.yaml ensures the next build picks up whatever Debian has patched by
+# then automatically. See #52.
 FROM public.ecr.aws/docker/library/python:3.12-slim
 
 ENV HOME=/opt/reconng \
