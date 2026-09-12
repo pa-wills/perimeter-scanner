@@ -67,6 +67,12 @@ Resources:
     Properties:
       ClusterSettings:
         - Name: containerInsights
+          # Deliberately left disabled (Security Hub ECS.12, accepted): a single
+          # ~3-minute batch task every couple of hours has little use for per-task
+          # resource-utilization metrics, and ReconngLogGroup already covers the
+          # application-level visibility that actually matters here. Revisit if the
+          # task's Cpu/Memory sizing ever needs justifying, or the workload grows
+          # into something with real ongoing resource pressure.
           Value: disabled
 
   ReconngLogGroup:

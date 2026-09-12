@@ -242,7 +242,6 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
-  # TODO: need a lifecycle policy to keep the last 5 images, say.
   PipelineOutputRegistry:
     Type: AWS::ECR::Repository
     Properties:
@@ -250,6 +249,32 @@ Resources:
         # ReconngImageDigest below) - this closes the other half of the gap: it stops a later
         # push from silently repointing a tag something else still keys off, e.g. by name in
         # the ECR console/CLI during manual troubleshooting. See #38.
+      LifecyclePolicy: # ECR.3. Deploys pin by digest, not tag (#38) - keep a generous
+        # window per image type (15 builds) so this can never expire an image a
+        # currently-deployed DevTest or Prod stack still references.
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep the last 15 onnmap images",
+                "selection": {"tagStatus": "tagged", "tagPrefixList": ["onnmap-"], "countType": "imageCountMoreThan", "countNumber": 15},
+                "action": {"type": "expire"}
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep the last 15 reconng images",
+                "selection": {"tagStatus": "tagged", "tagPrefixList": ["reconng-"], "countType": "imageCountMoreThan", "countNumber": 15},
+                "action": {"type": "expire"}
+              },
+              {
+                "rulePriority": 3,
+                "description": "Expire untagged images after 1 day",
+                "selection": {"tagStatus": "untagged", "countType": "sinceImagePushed", "countUnit": "days", "countNumber": 1},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
       RepositoryPolicyText:
         Version: "2012-10-17"
         Statement:
