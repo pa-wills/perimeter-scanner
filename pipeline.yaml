@@ -30,7 +30,7 @@ Parameters:
   GitHubRepoBranch:
     Type: String
     Description: "The GitHub repo's branch the pipeline's source stage tracks."
-    Default: "modernise-and-harden"
+    Default: "main"
   ProductionCfnRoleArn:
     Type: String
     Description: "The Role that will be assumed by CloudFormation in order to deploy production resources. Created by the perimeter-scanner-cross-account-roles StackSet (crossAccountRoles.yaml)."
