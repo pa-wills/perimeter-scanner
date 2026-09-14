@@ -1,42 +1,53 @@
-# Kudos to:
+# Build stage for the perimeter-scanner pipeline.
+#
+# 1. Build + push the two container images to the pipeline ECR repo (which is
+#    IMAGE_TAG-MUTABILITY: IMMUTABLE - see pipeline.yaml), tagged onnmap-<tag> /
+#    reconng-<tag> for human traceability only. Right after each push, resolve the
+#    digest ECR actually assigned and export it - the deploy stages pin
+#    OnNmapImageDigest/ReconngImageDigest to that digest, not the tag, so a later
+#    push (to this tag or any other) can never repoint what's already deployed. See #38.
+# 2. sam build + sam package the rest of template.yaml.
 
-# https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
-# And... we're assuming Ubuntu.
+version: 0.2
 
-# Phase definitions: https://aws.amazon.com/blogs/apn/an-introduction-to-aws-codebuild/
-
-version: 0.2 # Turns out this matters - https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html#build-spec-ref-versions
-
-# I think there are essentially two challenges here, and I have combined them together, and i shouldn't have.
-# The first challenge is building the container for the lambda, pushing it to the ECR. The second - the familiar challenge - building, 
-# packaging and deploying the template. 
-
-# TODO: make CodeBuild check the provided repo for a latest image. If none exists - build it. Else - continue.
-# TODO: sam build, package as before, but inhibit the building of the container, which SAM wants to do by default.
+env:
+  exported-variables:
+    - IMAGE_TAG
+    - ONNMAP_DIGEST
+    - RECONNG_DIGEST
 
 phases:
   install:
     runtime-versions:
-      docker: 20
-      python: 3.9
+      python: 3.13
   build:
     commands:
-      # TODO: remove the ugly static refs.
-      # TODO: make CodeBuild check the provided repo for a latest image. If none exists - build it. Else - continue.
-      # TODO: also, maybe make it conditional on something under onNmap changing.
+      # Build number suffix so a pipeline retry that rebuilds the same commit can't
+      # collide with an already-pushed immutable tag.
+      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-manual}-b${CODEBUILD_BUILD_NUMBER}"
+      - REGISTRY="${ECR_REPO_URI%%/*}"
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
 
-      # Build the containers, tag, push to ECR.
-      - cd onNmap
-      - aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com # ap-southeast-2 and account specific. TODO.
-      - docker build -t $ECR_REPO_NAME .
-      - docker tag $ECR_REPO_NAME 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/$ECR_REPO_NAME
-      - docker push $ECR_REPO_URI
+      # onNmap - container-image Lambda. --pull: always start from the current
+      # upstream base image, not a stale one CodeBuild's Docker cache happens to
+      # have locally - base-image OS packages get security patches over time.
+      - docker build --pull -t "$ECR_REPO_URI:onnmap-$IMAGE_TAG" onNmap
+      - docker push "$ECR_REPO_URI:onnmap-$IMAGE_TAG"
+      - ONNMAP_DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPO_NAME" --image-ids imageTag="onnmap-$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
 
-      # Build and package everything else.
-      - cd ..
+      # reconng - ECS Fargate task image
+      - docker build --pull -t "$ECR_REPO_URI:reconng-$IMAGE_TAG" reconng
+      - docker push "$ECR_REPO_URI:reconng-$IMAGE_TAG"
+      - RECONNG_DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPO_NAME" --image-ids imageTag="reconng-$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+
+      # Package the SAM template (zip function code -> S3). onNmap's ImageUri and the
+      # reconng task definition's Image are CFN intrinsics referencing the
+      # OnNmapImageDigest/ReconngImageDigest parameters, which sam passes through for
+      # the deploy stage to resolve via ParameterOverrides (see pipeline.yaml).
       - sam build
-      - sam package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml --force-upload  --image-repository $ECR_REPO_URI
+      - sam package --template-file template.yaml --s3-bucket "$S3_BUCKET" --output-template-file packaged-template.yaml --force-upload --image-repository "$ECR_REPO_URI"
 
 artifacts:
   files:
-    - "**/*"
+    - packaged-template.yaml
+    - template.yaml

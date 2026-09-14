@@ -27,171 +27,265 @@ Parameters:
     Description: "Please provide a comma-delimited list of domains to enumerate"
     Default: ""
     Type: String
-  GitHubUsername:
-    Description: "Please provide the username for accessing the private repo"
-    Type: String    
-  GitHubPersonalAccessToken:
-    Description: "Please provide the PAT for accessing the private repo"
-    Type: String    
-  KeyPairName:
-    Description: "Please provide the name of the key pair corresponding to the EC2 worker"
-    Type: String
   EcrRepoArn:
     Description: "Please provide the ARN of the ECR repo in which the build containers are stored"
     Type: String
   EcrRepoUri:
     Description: "Please provide the URI of the ECR repo in which the build containers are stored"
     Type: String
+  OnNmapImageDigest:
+    Description: "sha256 digest of the onNmap image (e.g. sha256:abcd...) - CloudFormation pins ImageUri to this digest, not a tag, so the deployed function can't be repointed by a later push to the same tag. The pipeline resolves this from ECR right after CodeBuild pushes the image."
+    Type: String
+  ReconngImageDigest:
+    Description: "sha256 digest of the reconng image (e.g. sha256:abcd...) - pins the ECS task definition's image by digest for the same reason as OnNmapImageDigest."
+    Type: String
+  VpcId:
+    Description: "VPC the recon-ng Fargate task's security group lives in (the default VPC)."
+    Type: AWS::EC2::VPC::Id
+  VpcSubnetIds:
+    Description: "Subnets the recon-ng Fargate task runs in (default-VPC public subnets)."
+    Type: List<AWS::EC2::Subnet::Id>
 
 Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups: 
-      - 
-        Label: 
+      -
+        Label:
           default: "recon-ng configuration"
-        Parameters: 
+        Parameters:
           - ReconngWorkspaceName
           - DomainsToEnumerate
-      - 
-        Label: 
-          default: "GitHub configuration"
-        Parameters: 
-          - GitHubUsername
-          - GitHubPersonalAccessToken
 
 Resources:
-  WorkerInstance:
-    Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT5M
-    DependsOn: WorkerInstanceProfile # If the IAM objects aren't there, then the aws cli invocations in the UserData won't be authorised.
+  # ------------------------------------------------------------------
+  # recon-ng Fargate worker. Replaced the EC2 WorkerInstance + the
+  # startEc2Instance boot Lambda (removed in #44); ReconngSchedule below
+  # replaced their EventBridge schedule.
+  # ------------------------------------------------------------------
+  ReconngCluster:
+    Type: AWS::ECS::Cluster
     Properties:
-      ImageId: "ami-0d147324c76e8210a"
-      IamInstanceProfile: !Ref WorkerInstanceProfile
-      InstanceType: "t2.micro"
-      KeyName: !Ref KeyPairName
-      SecurityGroupIds: 
-        - !Ref WorkerInstanceSecurityGroup
-      SubnetId: ""
-      UserData:
-        Fn::Base64:
-          Fn::Join:
-            - "\n"
-            - - "#!/bin/bash"
-              - "sudo yum update -y"
-              - "sudo yum install git pip nmap -y"
-              - "sudo dnf install cronie cronie-anacron -y" # Amazon Linux 2023 - doesn't have cron installed. Weird.
+      ClusterSettings:
+        - Name: containerInsights
+          # Deliberately left disabled (Security Hub ECS.12, accepted): a single
+          # ~3-minute batch task every couple of hours has little use for per-task
+          # resource-utilization metrics, and ReconngLogGroup already covers the
+          # application-level visibility that actually matters here. Revisit if the
+          # task's Cpu/Memory sizing ever needs justifying, or the workload grows
+          # into something with real ongoing resource pressure.
+          Value: disabled
 
-              - "# recon-ng installation"
-              - "cd /home/ec2-user"
-              - "git clone https://github.com/lanmaster53/recon-ng.git"
-              - "pip3 install -r recon-ng/REQUIREMENTS"
-              - "echo export PATH=\"$PATH:/home/ec2-user/recon-ng/\" >> .bash_profile"
-
-              - "# Clone the repo"
-              - Fn::Join:
-                - ""
-                - - "git clone https://"
-                  - !Ref GitHubUsername
-                  - ":"
-                  - !Ref GitHubPersonalAccessToken
-                  - "@github.com/pa-wills/perimeter-scanner.git"
-              - "cp perimeter-scanner/enumerateSubdomains.bash ."
-              - "# rm -rf perimeter-scanner"
-
-              - "# Ensure that the script will run at boot"
-              - "echo \"@reboot bash /home/ec2-user/enumerateSubdomains.bash &> /home/ec2-user/enumerate.log\" | sudo crontab -u ec2-user -"
-
-              - "# Env vars necessary for the code on the EC2 instance to do its job."
-              - Fn::Join:
-                - ""
-                - - "echo export PSCAN_DOMAINS_TO_ENUMERATE=\""
-                  - !Ref DomainsToEnumerate
-                  - "\" >> .bash_profile"
-              - Fn::Join:
-                - ""
-                - - "echo export PSCAN_RECONNG_WORKSPACE=\""
-                  - !Ref ReconngWorkspaceName
-                  - "\" >> .bash_profile"
-              - Fn::Join:
-                - ""
-                - - "echo export PSCAN_S3_BUCKET=\""
-                  - !Ref ResultsBucket
-                  - "\" >> .bash_profile"
-
-              - "# Signal stack that creation has successfully completed."
-              - Fn::Join:
-                - ""
-                - - "/opt/aws/bin/cfn-signal -e $? --stack "
-                  - !Ref 'AWS::StackName'
-                  - " --resource WorkerInstance --region "
-                  - !Ref 'AWS::Region'
-
-              - "# Require use of IMDSv2"
-              - "# Annoyingly - I can't set this staticly using the CFN template. Doing it after the event from the command line feels hacky."
-              - "TOKEN=`curl -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\"`"
-              - "INSTANCEID=\"$(curl http://169.254.169.254/latest/meta-data/instance-id -H \"X-aws-ec2-metadata-token: $TOKEN\")\"" # You can't use a !Ref without causing a circular reference.
-              - "aws ec2 modify-instance-metadata-options --instance-id $INSTANCEID --http-tokens required --http-endpoint enabled --http-put-response-hop-limit 1 region —ap-southeast-2"
-
-              - "sudo chmod 755 /home/ec2-user"
-
-              - "# Stop the instance (we don't run enumeration on the launch boot)."
-              - "aws ec2 stop-instances --instance-ids $INSTANCEID --region ap-southeast-2"
-
-  WorkerInstanceSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
+  ReconngLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      GroupDescription: Enable ..... nothing.
+      RetentionInDays: 30
 
-  WorkerInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
-    Properties: 
-      Roles:
-        - !Ref WorkerInstanceRole
-
-  WorkerInstanceRole:
-    Type: "AWS::IAM::Role"
-    Properties: 
-      AssumeRolePolicyDocument: 
-        Version: "2012-10-17"
-        Statement: 
-          - 
-            Effect: "Allow"
-            Principal:
-              Service:
-                - "ec2.amazonaws.com"
-            Action: 
-              - "sts:AssumeRole"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-      Path: "/"
-
-  WorkerInstanceRolePolicy:
-    Type: 'AWS::IAM::Policy'
+  ReconngSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      PolicyName: policyForTheEc2Instance
-      PolicyDocument:
+      GroupDescription: recon-ng Fargate task - egress only (no ingress).
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - Description: HTTPS (OSINT APIs, ECR, S3, AWS APIs)
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - Description: HTTP (some OSINT sources)
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - Description: DNS over TCP (resolve module)
+          IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+        - Description: DNS over UDP
+          IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+
+  ReconngTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Action: 
-              - 's3:PutObject'
-            Resource: !Join
-              - ''
-              - - !GetAtt ResultsBucket.Arn
-                - /*
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ReconngTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
           - Effect: Allow
-            Action: 
-              - 'ec2:StopInstances'
-              - 'ec2:DescribeInstances'
-              - 'ec2:ModifyInstanceMetadataOptions'
-            Resource: '*' # You'd want to constrain this to an Instance, but how to do so without a circular reference?
-      Roles:
-        - !Ref WorkerInstanceRole
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: reconngTaskRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:AbortMultipartUpload
+                Resource: !Sub "${ResultsBucket.Arn}/*"
+              - Effect: Allow
+                Action: s3:GetBucketLocation
+                Resource: !GetAtt ResultsBucket.Arn
+
+  ReconngTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AWS::StackName}-reconng"
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: "512"
+      Memory: "1024"
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt ReconngTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ReconngTaskRole.Arn
+      ContainerDefinitions:
+        - Name: reconng
+          Image: !Join ['', [!Ref EcrRepoUri, '@', !Ref ReconngImageDigest]]
+          Essential: true
+          ReadonlyRootFilesystem: true # ECS.5
+          User: reconng # ECS.20 - non-root; matches the image's own USER
+          LinuxParameters:
+            Tmpfs:
+              # recon-ng writes its keys/workspace DBs under $HOME/.recon-ng at
+              # runtime; enumerateSubdomains.bash re-seeds this from the build-time
+              # copy on every start (see reconng/Dockerfile). ECS's tmpfs defaults to
+              # mode=755 root-owned, not the usual 1777 - must be set explicitly or
+              # the non-root user can't write to it.
+              - ContainerPath: /opt/reconng/.recon-ng
+                Size: 128
+                MountOptions: ["mode=1777"]
+              - ContainerPath: /tmp
+                Size: 64
+                MountOptions: ["mode=1777"]
+          Environment:
+            - Name: PSCAN_DOMAINS_TO_ENUMERATE
+              Value: !Ref DomainsToEnumerate
+            - Name: PSCAN_RECONNG_WORKSPACE
+              Value: !Ref ReconngWorkspaceName
+            - Name: PSCAN_S3_BUCKET
+              Value: !Ref ResultsBucket
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ReconngLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: reconng
+
+  # Role EventBridge Scheduler assumes to run the task.
+  ReconngScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: reconngScheduleRunTask
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ecs:RunTask
+                Resource: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/${AWS::StackName}-reconng:*"
+                Condition:
+                  ArnEquals:
+                    ecs:cluster: !GetAtt ReconngCluster.Arn
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !GetAtt ReconngTaskRole.Arn
+                  - !GetAtt ReconngTaskExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+
+  # Reuses ScheduleStartInstancePeriodicityParameter (rate(2 hours) devtest
+  # / rate(24 hours) prod) - the parameter that used to drive startEc2Instance.
+  ReconngSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression: !Ref ScheduleStartInstancePeriodicityParameter
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: !GetAtt ReconngCluster.Arn
+        RoleArn: !GetAtt ReconngScheduleRole.Arn
+        EcsParameters:
+          TaskDefinitionArn: !Ref ReconngTaskDefinition
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              Subnets: !Ref VpcSubnetIds
+              SecurityGroups:
+                - !Ref ReconngSecurityGroup
+              AssignPublicIp: ENABLED
 
   ResultsBucket:
     Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          # results.csv is a transient hand-off - onArrivalOfResults parses it and
+          # deletes it within seconds, and the data is persisted in ResultsTableHosts.
+          # These rules only ever act on objects orphaned by a failed parse.
+          - Id: abort-incomplete-multipart-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: expire-transient-result-csvs
+            Status: Enabled
+            ExpirationInDays: 7
+
+  ResultsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ResultsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowSSLRequestsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ResultsBucket.Arn
+              - !Sub "${ResultsBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
 
   NmapWorkQueue:
     Type: AWS::SQS::Queue
@@ -201,7 +295,7 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt NmapWorkQueueDLQ.Arn
         maxReceiveCount: 5
-      VisibilityTimeout: 300 # Idiotically i allowed this to be set *lower* than the lambda worker's timeout setting.
+      VisibilityTimeout: 300 # >= the onNmap function timeout (120s), so a message stays hidden until the worker finishes.
 
   NmapWorkQueueDLQ:
     Type: AWS::SQS::Queue
@@ -341,7 +435,7 @@ Resources:
       Handler: onArrivalOfHostsStreamEvent.handler
       MemorySize: 256
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 20
 
   onArrivalOfHostPortsStreamEvent:
@@ -363,7 +457,7 @@ Resources:
       Handler: onArrivalOfHostPortsStreamEvent.handler
       MemorySize: 256
       Role: !GetAtt onPopulateHostPortsOfInterestTableExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 20
 
   onArrivalOfResults:
@@ -392,7 +486,7 @@ Resources:
       Handler: onArrivalOfResults.handler
       MemorySize: 256
       Role: !GetAtt onArrivalOfResultsExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 20
 
   onNmap:
@@ -407,10 +501,7 @@ Resources:
             Ref: ResultsTableHostPorts
           HOSTS_OF_INTEREST_TABLE:
             Ref: DerivedTableHostsOfInterest
-      ImageUri: !Join
-        - ''
-        - - !Ref EcrRepoUri
-          - ':latest'
+      ImageUri: !Join ['', [!Ref EcrRepoUri, '@', !Ref OnNmapImageDigest]]
       PackageType: Image
       Role: !GetAtt onNmapExecutionRole.Arn
       Timeout: 120
@@ -432,8 +523,6 @@ Resources:
       Principal: "events.amazonaws.com"
       SourceArn: !GetAtt onNmapEventRule.Arn
 
-  # TODO: I'm going to need a custom resource to update the ImageURI to the latest item.
-  # E.g. aws lambda update-function-code --function-name  PerimeterScanner-DevTest-onNmap-XcpjqIJfhgM8 --image-uri 623056247312.dkr.ecr.ap-southeast-2.amazonaws.com/perimeterscanner-app-pipelineoutputregistry-qmeq969nipvp:latest
 
   onPopulateHostsOfInterestTable:
     Type: AWS::Serverless::Function
@@ -451,7 +540,7 @@ Resources:
       Handler: onPopulateHostsOfInterestTable.handler
       MemorySize: 1024
       Role: !GetAtt onPopulateHostsOfInterestTableExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 60
 
   onPopulateNmapWorkQueue:
@@ -475,7 +564,7 @@ Resources:
       Handler: onPopulateNmapWorkQueue.handler
       MemorySize: 1024
       Role: !GetAtt onPopulateNmapWorkQueueExecutionRole.Arn
-      Runtime: python3.9
+      Runtime: python3.13
       Timeout: 60
 
   onArrivalOfResultsExecutionRole:
@@ -718,66 +807,4 @@ Resources:
       Roles:
         - !Ref onPopulateHostPortsOfInterestTableExecutionRole
 
-  startEc2Instance:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: index.handler
-      Description: 'The function that starts my EC2 worker instance.'
-      Environment:
-        Variables:
-          INSTANCE_ID: 
-            Ref: WorkerInstance
-      Events:
-        ProducerScheduleEvent:
-          Type: Schedule
-          Properties:
-            Schedule: !Ref ScheduleStartInstancePeriodicityParameter
-      InlineCode: |
-        import boto3
-        import os
-        
-        region = 'ap-southeast-2'
-        ec2 = boto3.client('ec2', region_name=region)
-
-        def handler(event, context):
-          ec2.start_instances(InstanceIds = [os.environ.get('INSTANCE_ID')])
-
-      MemorySize: 256
-      Role: !GetAtt startEc2InstancesExecutionRole.Arn
-      Runtime: python3.9
-      Timeout: 20
-
-  startEc2InstancesExecutionRole:
-    Type: "AWS::IAM::Role"
-    Properties: 
-      AssumeRolePolicyDocument: 
-        Version: "2012-10-17"
-        Statement: 
-          - 
-            Effect: "Allow"
-            Principal: 
-              Service: 
-                - "lambda.amazonaws.com"
-            Action: 
-              - "sts:AssumeRole"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Important. Gives Lambda perms to write to CWatch.
-      Path: "/"
-
-  startEc2InstancesExecutionRolePolicy:
-    Type: 'AWS::IAM::Policy'
-    Properties:
-      PolicyName: policyToAllowEc2InstancesToStart
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action: 'ec2:StartInstances'
-            Resource: !Join
-              - ''
-              - - 'arn:aws:ec2:ap-southeast-2:*:instance/'
-                - !Ref WorkerInstance
-
-      Roles:
-        - !Ref startEc2InstancesExecutionRole
 
