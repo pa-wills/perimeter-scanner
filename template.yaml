@@ -295,12 +295,31 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt NmapWorkQueueDLQ.Arn
         maxReceiveCount: 5
-      VisibilityTimeout: 300 # >= the onNmap function timeout (120s), so a message stays hidden until the worker finishes.
+      VisibilityTimeout: 300 # >= the onNmap function timeout (240s), so a message stays hidden until the worker finishes.
 
   NmapWorkQueueDLQ:
     Type: AWS::SQS::Queue
     Properties:
       MessageRetentionPeriod: 1209600 # 14 days
+
+  # No AlarmActions yet - wire this up to an SNS topic once a notification
+  # channel is decided, otherwise a stuck DLQ (nmap scans that fail 5 times -
+  # see NmapWorkQueue's maxReceiveCount above) goes unnoticed.
+  NmapWorkQueueDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "recon-ng nmap work items have exhausted their retries and landed in the dead-letter queue - these hosts/ports are no longer being scanned."
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt NmapWorkQueueDLQ.QueueName
+      Statistic: Maximum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
 
   ResultsTableHosts:
     Type: AWS::DynamoDB::Table
@@ -504,7 +523,8 @@ Resources:
       ImageUri: !Join ['', [!Ref EcrRepoUri, '@', !Ref OnNmapImageDigest]]
       PackageType: Image
       Role: !GetAtt onNmapExecutionRole.Arn
-      Timeout: 120
+      MemorySize: 512
+      Timeout: 240
 
   onNmapEventRule:
     Type: AWS::Events::Rule
